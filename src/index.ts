@@ -111,9 +111,9 @@ app.get('/hashes', (req, res) => {
    if (raw) {
       const names = raw.split(',')
       const filtered = Object.fromEntries(Object.entries(store.hashes).filter(([key]) => names.includes(key)))
-      res.json(filtered)
+      res.json({ requested: filtered, all: store.hashes })
    } else {
-      res.json(store.hashes)
+      res.json({ requested: {}, all: store.hashes })
    }
 })
 

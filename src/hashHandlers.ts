@@ -29,7 +29,8 @@ export async function updateHash(op: Operation) {
                if (url.includes('query') || (url.includes('graphql') && res.status() === 200)) {
                   const body = res.request().postDataJSON()
                   if (!body) return false
-                  store.hashes[body.operationName] = body.extensions?.persistedQuery?.sha256Hash
+                  const hash = body.extensions?.persistedQuery?.sha256Hash
+                  if (hash) store.hashes[body.operationName] = hash
                   return body.operationName === op.name
                }
                return false
