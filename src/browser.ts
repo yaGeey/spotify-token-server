@@ -52,6 +52,12 @@ export async function createInstance() {
    const page = await context.newPage()
    await page.route('**/*.{png,jpg,jpeg,gif,woff,woff2,sentry}', (r) => r.abort())
    await page.route('**/*{onetrust,i.scdn.co/image/,mosaic.scdn.co/,encore.scdn.co/fonts}*', (r) => r.abort())
+
+   // Hide OneTrust consent with CSS
+   await page.addStyleTag({
+      content: '#onetrust-consent-sdk { display: none !important; pointer-events: none !important; }',
+   })
+
    return { browser, context, page }
 }
 
