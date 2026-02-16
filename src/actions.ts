@@ -63,16 +63,24 @@ export const addToPlaylistAction = async (page: Page) => {
       console.log('clicked playlist in search results')
    }
 
-   // Wait for "Already added" dialog or the button to appear (if song is already in playlist)
-   await page.waitForTimeout(5000)
-   const addAnywayBtn = page.getByRole('button', { name: 'Add anyway' })
+   // Wait for context menu to close
+   await menu.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => console.log('menu did not hide'))
+   console.log('context menu closed')
+
+   // Wait for "Already added" dialog to appear
+   const dialog = page.locator('[role="dialog"]').filter({ hasText: 'Already added' })
    try {
-      await addAnywayBtn.waitFor({ state: 'visible', timeout: 15000 })
+      await dialog.waitFor({ state: 'visible', timeout: 10000 })
+      console.log('Already added dialog is visible')
+
+      const addAnywayBtn = dialog.getByRole('button', { name: /add anyway/i })
+      await addAnywayBtn.waitFor({ state: 'visible', timeout: 5000 })
       console.log('is "Add anyway" button visible? true')
       await addAnywayBtn.click({ timeout: slowHostTimeoutMs })
       console.log('clicked "Add anyway" button')
-   } catch {
+   } catch (err) {
       console.log('is "Add anyway" button visible? false')
+      console.log(`Error: ${(err as Error).message}`)
    }
 
    // Wait a bit for the GraphQL request to fire
