@@ -92,7 +92,7 @@ export const removeFromPlaylistAction = async (page: Page) => {
 }
 
 // fetchPlaylist + modify hashes + (possibly search)
-export const getModifyPlaylistHashAction = async (page: Page): Promise<void> => {
+export const getModifyPlaylistHashAction = async (page: Page, names: string[]): Promise<void> => {
    await page.goto('https://open.spotify.com/playlist/6uXwlbGoEnIQT9Cu5RsuxP', {
       waitUntil: 'domcontentloaded',
    })
@@ -103,8 +103,10 @@ export const getModifyPlaylistHashAction = async (page: Page): Promise<void> => 
    if (result.data.playlistV2.content.totalCount === 0) {
       console.log('Playlist is empty, using addToPlaylist flow to get hash')
       await page.goto('https://open.spotify.com/search/deco27', { waitUntil: 'domcontentloaded' })
-      return addNotDuplicateItemToPlaylistAction(page)
+      const addPromise = captureQueryPromise(page, names).catch(() => null)
+      await Promise.all([addPromise, addNotDuplicateItemToPlaylistAction(page)])
    } else {
-      return removeFromPlaylistAction(page)
+      const removePromise = captureQueryPromise(page, names).catch(() => null)
+      await Promise.all([removePromise, removeFromPlaylistAction(page)])
    }
 }

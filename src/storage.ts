@@ -12,11 +12,11 @@ export type Operation = (
    | {
         type?: never
         url: string
-        action?: (page: Page) => Promise<void>
+        action?: (page: Page, names: string[]) => Promise<void>
      }
    | {
         type: 'action'
-        action: (page: Page) => Promise<void>
+        action: (page: Page, names: string[]) => Promise<void>
      }
 ) & { names: [string, ...string[]] }
 

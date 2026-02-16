@@ -52,16 +52,27 @@ export async function captureQueryPromise(page: Page, operationNames: string[]) 
 }
 
 export async function updateHash(page: Page, op: Operation) {
+   if (op.type === 'action') {
+      // For action-based operations, the action handles everything including capturing hashes
+      await op.action(page, op.names).catch((e) => {
+         throw new Error(`Action failed: ${e.message}`)
+      })
+      // Return the hash for the first name (they all share the same hash)
+      const hash = store.tempHashes[op.names[0]] || null
+      console.log(`Hash for ${op.names.join(', ')}: ${hash}`)
+      return hash
+   }
+
    // For URL-based operations
    const queryPromise = captureQueryPromise(page, op.names).catch((err) => {
       console.warn(`⚠️ [${op.names}] Hash listener ended: ${err.message}`)
       return null
    })
 
-   if (op.type !== 'action') await page.goto(op.url, { waitUntil: 'domcontentloaded', timeout: 120000 })
+   await page.goto(op.url, { waitUntil: 'domcontentloaded', timeout: 120000 })
 
    const actionPromise = op.action
-      ? op.action(page).catch((e) => {
+      ? op.action(page, op.names).catch((e) => {
            throw new Error(`Action failed: ${e.message}`)
         })
       : Promise.resolve()

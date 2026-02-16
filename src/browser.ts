@@ -14,8 +14,12 @@ export async function createInstance() {
          '--disable-setuid-sandbox',
          '--disable-gpu',
          '--no-first-run',
-         // '--single-process',
          '--mute-audio',
+         '--js-flags=--max-old-space-size=512',
+         '--disable-background-networking',
+         '--disable-background-timer-throttling',
+         '--disable-backgrounding-occluded-windows',
+         '--disable-renderer-backgrounding',
       ],
    })
    const context = await browser.newContext({
@@ -59,7 +63,13 @@ export async function handleError(error: unknown) {
 
 export async function killBrowser(browser: Browser | null) {
    console.log(`<- Closing browser`)
-   if (browser) await browser.close().catch(() => {})
+   if (browser) {
+      const contexts = browser.contexts()
+      for (const context of contexts) {
+         await context.close().catch(() => {})
+      }
+      await browser.close().catch(() => {})
+   }
    if (global.gc) global.gc() // force garbage collection to free RAM
 }
 
