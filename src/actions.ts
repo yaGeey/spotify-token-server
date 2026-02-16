@@ -2,7 +2,7 @@ import type { Page } from 'playwright'
 
 export const addToPlaylistAction = async (page: Page) => {
    const track = page.locator('[data-testid="tracklist-row"]').first()
-   await track.waitFor({ state: 'visible', timeout: 10000 })
+   await track.waitFor({ state: 'visible' })
    await track.click({ button: 'right' })
 
    const menu = page.locator('[data-testid="context-menu"]')
@@ -23,5 +23,5 @@ export const addToPlaylistAction = async (page: Page) => {
    }
 
    const addAnywayBtn = page.getByRole('button', { name: 'Add anyway' })
-   await addAnywayBtn.click({ timeout: 2000 })
+   await addAnywayBtn.click()
 }
