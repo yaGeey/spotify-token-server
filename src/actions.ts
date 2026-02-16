@@ -45,7 +45,7 @@ export const addToPlaylistAction = async (page: Page) => {
    console.log('playlist search input visible')
    await input.fill('TEST', { timeout: slowHostTimeoutMs })
    console.log('playlist search input filled')
-   await page.waitForTimeout(5000)
+   // await page.waitForTimeout(5000)
    console.log('waited for search results to populate')
 
    const targetPlaylist = page.getByRole('menuitem', { name: 'TEST', exact: true }).first()
@@ -67,23 +67,24 @@ export const addToPlaylistAction = async (page: Page) => {
    await menu.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => console.log('menu did not hide'))
    console.log('context menu closed')
 
-   // Wait for "Already added" dialog to appear
-   const dialog = page.locator('[role="dialog"]').filter({ hasText: 'Already added' })
-   try {
-      await dialog.waitFor({ state: 'visible', timeout: 10000 })
-      console.log('Already added dialog is visible')
+   // Wait for UI to settle and check for "Already added" dialog
+   await page.waitForTimeout(3000)
 
-      const addAnywayBtn = dialog.getByRole('button', { name: /add anyway/i })
-      await addAnywayBtn.waitFor({ state: 'visible', timeout: 5000 })
-      console.log('is "Add anyway" button visible? true')
+   // Check if "Already added" dialog appeared (only if song was already in playlist)
+   const addAnywayBtn = page.getByRole('button', { name: /add anyway/i })
+   const isVisible = await addAnywayBtn.isVisible().catch(() => false)
+   console.log(`is "Add anyway" button visible? ${isVisible}`)
+   if (isVisible) {
       await addAnywayBtn.click({ timeout: slowHostTimeoutMs })
       console.log('clicked "Add anyway" button')
-   } catch (err) {
-      console.log('is "Add anyway" button visible? false')
-      console.log(`Error: ${(err as Error).message}`)
+      // Wait longer for the addToPlaylist GraphQL operation to fire after clicking
+      console.log('waiting for addToPlaylist operation to fire...')
+      await page.waitForTimeout(15000)
+   } else {
+      // If no dialog, track was added successfully - wait for operation
+      console.log('waiting for addToPlaylist operation to fire...')
+      await page.waitForTimeout(15000)
    }
 
-   // Wait a bit for the GraphQL request to fire
-   await page.waitForTimeout(2000)
    console.log('finished addToPlaylistAction')
 }
