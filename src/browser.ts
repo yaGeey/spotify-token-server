@@ -47,7 +47,7 @@ export async function createInstance() {
    ])
    const page = await context.newPage()
    await page.route('**/*.{png,jpg,jpeg,gif,woff,woff2,sentry}', (r) => r.abort())
-   await page.route('**/*onetrust*', (r) => r.abort())
+   await page.route('**/*{onetrust,i.scdn.co/image/,mosaic.scdn.co/,encore.scdn.co/fonts}*', (r) => r.abort())
    return { browser, context, page }
 }
 

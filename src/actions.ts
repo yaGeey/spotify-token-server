@@ -21,27 +21,34 @@ export const addToPlaylistAction = async (page: Page) => {
 
    await page.waitForLoadState('networkidle', { timeout: slowHostTimeoutMs }) // Важливо: networkidle краще ніж domcontentloaded для SPA
    await dismissConsentIfPresent(page)
+   console.log('page loaded')
 
    const track = page.locator('[data-testid="tracklist-row"]').first()
    await track.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
+   console.log('track found')
 
    // ТРЮК 1: Примусовий скрол до елемента перед кліком
    await track.scrollIntoViewIfNeeded()
    await track.click({ button: 'right', timeout: slowHostTimeoutMs })
+   console.log('right-clicked track')
 
    const menu = page.locator('[data-testid="context-menu"]')
    await menu.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
+   console.log('context menu visible')
 
    const addToPlaylistButton = menu.getByText('Add to Playlist', { exact: false })
    await addToPlaylistButton.waitFor({ state: 'visible' })
    await addToPlaylistButton.hover() // Hover обов'язковий
+   console.log('hovered "Add to Playlist"')
 
    const input = page.locator('[placeholder="Find a playlist"]')
    await input.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
+   console.log('search input visible')
 
    // ТРЮК 2: Повільний ввід тексту. Це дає React час обробити стейт.
    // Замість fill використовуємо pressSequentially з затримкою
    await input.pressSequentially('TEST', { delay: 100 })
+   console.log('typed playlist name with delay')
 
    // Даємо час на рендеринг відфільтрованого списку
    await page.waitForTimeout(1500)
@@ -65,7 +72,8 @@ export const addToPlaylistAction = async (page: Page) => {
    }
 
    // Wait for context menu to close implicitly
-   await menu.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {})
+   await menu.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => { })
+   console.log('context menu closed')
 
    // --- БЛОК ОБРОБКИ "Add Anyway" ---
    // Тут важливо чекати не просто появи, а появи АБО зникнення діалогу
