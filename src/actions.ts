@@ -24,16 +24,18 @@ export const addToPlaylistAction = async (page: Page) => {
 
    const track = page.locator('[data-testid="tracklist-row"]').first()
    await track.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
-   await track.click({ button: 'right' })
+   await track.click({ button: 'right', timeout: slowHostTimeoutMs })
 
    const menu = page.locator('[data-testid="context-menu"]')
-   await menu.waitFor()
+   await menu.waitFor({ timeout: slowHostTimeoutMs })
 
    const addToPlaylistButton = menu.getByText('Add to Playlist', { exact: false })
-   await addToPlaylistButton.hover()
+   await addToPlaylistButton.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
+   await addToPlaylistButton.hover({ timeout: slowHostTimeoutMs })
 
    const input = page.locator('[placeholder="Find a playlist"]')
-   await input.fill('TEST')
+   await input.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
+   await input.fill('TEST', { timeout: slowHostTimeoutMs })
    await page.waitForTimeout(500)
 
    const targetPlaylist = page.getByRole('menuitem', { name: 'TEST', exact: true }).first()
@@ -46,5 +48,6 @@ export const addToPlaylistAction = async (page: Page) => {
    }
 
    const addAnywayBtn = page.getByRole('button', { name: 'Add anyway' })
-   await addAnywayBtn.click()
+   await addAnywayBtn.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
+   await addAnywayBtn.click({ timeout: slowHostTimeoutMs })
 }
