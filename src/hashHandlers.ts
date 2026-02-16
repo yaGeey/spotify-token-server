@@ -40,7 +40,7 @@ export async function updateHash(op: Operation) {
                }
                return false
             },
-            { timeout: 120000 },
+            { timeout: 150000 },
          )
          .then((res) => (res.request().postDataJSON()?.extensions?.persistedQuery?.sha256Hash || null) as string | null)
          .catch((err) => {
@@ -48,7 +48,7 @@ export async function updateHash(op: Operation) {
             return null
          })
 
-      await page.goto(op.url, { waitUntil: 'domcontentloaded', timeout: 90000 })
+      await page.goto(op.url, { waitUntil: 'domcontentloaded', timeout: 120000 })
 
       const actionPromise = op.action
          ? op.action(page).catch((e) => {
