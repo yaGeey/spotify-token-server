@@ -1,27 +1,29 @@
 import type { Browser, BrowserContext, Page } from 'playwright'
 import { chromium } from 'playwright-extra'
+import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 
-export let glBrowser: Browser | null = null
-export let glContext: BrowserContext | null = null
-export let glPage: Page | null = null
+chromium.use(StealthPlugin())
 
-export async function ensureBrowser() {
-   if (glBrowser && glBrowser.isConnected() && glPage && !glPage.isClosed()) return
-
-   // launch browser
-   if (glBrowser) await glBrowser.close() // if not connected - close and create new one
-   glBrowser = await chromium.launch({
+export async function createInstance() {
+   console.log(`-> Launching browser`)
+   const browser = await chromium.launch({
       headless: true,
-      args: ['--disable-dev-shm-usage', '--disable-gpu', '--mute-audio', '--no-sandbox'],
+      args: [
+         '--disable-dev-shm-usage',
+         '--no-sandbox',
+         '--disable-setuid-sandbox',
+         '--disable-gpu',
+         '--no-first-run',
+         '--single-process',
+         '--mute-audio',
+      ],
    })
-
-   // create context
-   glContext = await glBrowser.newContext({
+   const context = await browser.newContext({
       locale: 'en-US',
       timezoneId: 'America/New_York',
       bypassCSP: true,
    })
-   await glContext.addCookies([
+   await context.addCookies([
       {
          name: 'sp_dc',
          value: process.env.SP_DC!,
@@ -41,21 +43,19 @@ export async function ensureBrowser() {
          sameSite: 'None',
       },
    ])
-
-   // open page
-   glPage = await glContext.newPage()
-   await glPage.route('**/*.{png,jpg,jpeg,gif,woff,woff2,sentry}', (r) => r.abort())
+   const page = await context.newPage()
+   await page.route('**/*.{png,jpg,jpeg,gif,woff,woff2,sentry}', (r) => r.abort())
+   return { browser, context, page }
 }
 
-export async function handleBrowserError(error: unknown) {
-   // close and clear browser
-   if (glBrowser) {
-      await glBrowser.close().catch(() => {})
-      glBrowser = null
-   }
-
-   // handle error
+export async function handleError(error: unknown) {
    const details = error instanceof Error ? error.message : 'Unknown error'
-   console.error('Error:', details)
+   console.error('💥 Error:', details)
    return details
+}
+
+export async function killBrowser(browser: Browser | null) {
+   console.log(`<- Closing browser`)
+   if (browser) await browser.close().catch(() => {})
+   if (global.gc) global.gc() // force garbage collection to free RAM
 }

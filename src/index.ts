@@ -1,17 +1,15 @@
 import express from 'express'
-import { chromium } from 'playwright-extra'
 import 'dotenv/config'
-import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import PQueue from 'p-queue'
 import cron from 'node-cron'
 import { store, type AccessTokenResponse, type TokenResponse } from './storage.js'
-import { ensureBrowser, glPage, handleBrowserError } from './browser.js'
+import { createInstance, killBrowser, handleError } from './browser.js'
 import { delay } from './utils.js'
 import { updateAllHashes, operations, updateHash } from './hashHandlers.js'
+import type { Browser } from 'playwright'
 
 const app = express()
 const PORT = process.env.PORT || 3000
-chromium.use(StealthPlugin())
 const queue = new PQueue({ concurrency: 1 })
 
 // Health check - must be before auth middleware
@@ -44,6 +42,7 @@ function isTokenValid(): boolean {
 }
 
 app.get('/token', async (req, res) => {
+   let exBrowser: Browser | null = null
    try {
       // return token if valid
       if (isTokenValid()) {
@@ -58,8 +57,8 @@ app.get('/token', async (req, res) => {
             return { access: store.access!, client: store.client! } satisfies TokenResponse
          }
 
-         await ensureBrowser()
-         const page = glPage!
+         const { browser, page } = await createInstance()
+         exBrowser = browser
 
          // access token
          const accessTokenPromise = page
@@ -99,9 +98,12 @@ app.get('/token', async (req, res) => {
          }
          return { access: store.access!, client: store.client! } satisfies TokenResponse
       })
+
+      killBrowser(exBrowser)
       res.json(result)
-   } catch (error) {
-      const details = handleBrowserError(error)
+   } catch (err) {
+      const details = handleError(err)
+      killBrowser(exBrowser)
       res.status(500).json({ error: 'Failed to get token', details })
    }
 })
@@ -138,12 +140,10 @@ app.put('/hashes', async (req, res) => {
          return res.status(400).json({ error: 'No valid operation names provided' })
       }
       if (hashes.length !== names.length) {
-         return res
-            .status(404)
-            .json({
-               error: 'Some operation names were invalid',
-               details: { raw, hashes: Object.fromEntries(hashes.map((i) => [i.name, i.hash])) },
-            })
+         return res.status(404).json({
+            error: 'Some operation names were invalid',
+            details: { raw, hashes: Object.fromEntries(hashes.map((i) => [i.name, i.hash])) },
+         })
       }
    }
 

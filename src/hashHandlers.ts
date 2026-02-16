@@ -1,5 +1,5 @@
 import { addToPlaylistAction } from './actions.js'
-import { ensureBrowser, glPage, handleBrowserError } from './browser.js'
+import { createInstance, killBrowser, handleError } from './browser.js'
 import { type Operation, store } from './storage.js'
 import { delay } from './utils.js'
 
@@ -17,37 +17,49 @@ export const operations: Operation[] = [
 ]
 
 export async function updateHash(op: Operation) {
-   try {
-      await ensureBrowser()
-      const page = glPage!
+   const { browser, page } = await createInstance()
 
-      // catch hashes from any graphql request
+   try {
       const hashPromise = page
          .waitForResponse(
             async (res) => {
                const url = res.url()
                if (url.includes('query') || (url.includes('graphql') && res.status() === 200)) {
-                  const body = res.request().postDataJSON()
-                  if (!body) return false
-                  const hash = body.extensions?.persistedQuery?.sha256Hash
-                  if (hash) store.hashes[body.operationName] = hash
-                  return body.operationName === op.name
+                  try {
+                     const body = res.request().postDataJSON()
+                     if (!body) return false
+                     const hash = body.extensions?.persistedQuery?.sha256Hash
+                     if (hash) store.hashes[body.operationName] = hash
+                     return body.operationName === op.name
+                  } catch {
+                     return false
+                  }
                }
                return false
             },
             { timeout: 60000 },
          )
          .then((res) => (res.request().postDataJSON()?.extensions?.persistedQuery?.sha256Hash || null) as string | null)
+         .catch((err) => {
+            console.warn(`⚠️ [${op.name}] Hash listener ended: ${err.message}`)
+            return null
+         })
 
-      // load the page
       await page.goto(op.url, { waitUntil: 'domcontentloaded', timeout: 60000 })
 
-      // perform action and listen for side hashes
-      const [hash] = await Promise.all([hashPromise, op.action ? op.action(page) : Promise.resolve()])
+      const actionPromise = op.action
+         ? op.action(page).catch((e) => {
+              throw new Error(`Action failed: ${e.message}`)
+           })
+         : Promise.resolve()
+
+      const [hash] = await Promise.all([hashPromise, actionPromise])
       return hash
    } catch (err) {
-      handleBrowserError(err)
+      handleError(err)
       return null
+   } finally {
+      await killBrowser(browser)
    }
 }
 
