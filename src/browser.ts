@@ -14,7 +14,7 @@ export async function createInstance() {
          '--disable-setuid-sandbox',
          '--disable-gpu',
          '--no-first-run',
-         '--single-process',
+         // '--single-process',
          '--mute-audio',
       ],
    })

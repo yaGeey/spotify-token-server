@@ -71,41 +71,9 @@ export const addToPlaylistAction = async (page: Page) => {
    // Wait for UI to settle
    await page.waitForTimeout(2000)
 
-   // Log and dismiss any dialogs
-   const allDialogs = await page.locator('[role="dialog"]').count()
-   console.log(`Number of dialogs visible: ${allDialogs}`)
-
-   if (allDialogs > 0) {
-      // Try to dismiss dialogs with Escape key multiple times
-      console.log('Attempting to dismiss dialogs with Escape')
-      await page.keyboard.press('Escape').catch(() => {})
-      await page.waitForTimeout(300)
-      await page.keyboard.press('Escape').catch(() => {})
-      await page.waitForTimeout(300)
-
-      // Check for close buttons
-      const closeButtons = page.locator(
-         '[role="dialog"] button[aria-label*="close" i], [role="dialog"] button[aria-label*="dismiss" i]',
-      )
-      const closeCount = await closeButtons.count()
-      if (closeCount > 0) {
-         console.log(`Found ${closeCount} close buttons, clicking them`)
-         for (let i = 0; i < closeCount; i++) {
-            await closeButtons
-               .nth(i)
-               .click({ timeout: 1000 })
-               .catch(() => {})
-            await page.waitForTimeout(200)
-         }
-      }
-
-      await page.waitForTimeout(1000)
-      const remainingDialogs = await page.locator('[role="dialog"]').count()
-      console.log(`Dialogs remaining after dismiss attempt: ${remainingDialogs}`)
-   }
-
    // Check if "Already added" dialog appeared (only if song was already in playlist)
    const addAnywayBtn = page.getByRole('button', { name: /add anyway/i })
+   await addAnywayBtn.waitFor({ timeout: 5000 }).catch(() => console.log('"Add anyway" button did not appear'))
    const isVisible = await addAnywayBtn.isVisible().catch(() => false)
    console.log(`is "Add anyway" button visible? ${isVisible}`)
    if (isVisible) {
