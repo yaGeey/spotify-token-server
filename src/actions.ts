@@ -1,8 +1,12 @@
 import type { Page } from 'playwright'
 
 export const addToPlaylistAction = async (page: Page) => {
+   const slowHostTimeoutMs = 90000
+
+   await page.waitForLoadState('domcontentloaded', { timeout: slowHostTimeoutMs })
+
    const track = page.locator('[data-testid="tracklist-row"]').first()
-   await track.waitFor({ state: 'visible' })
+   await track.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
    await track.click({ button: 'right' })
 
    const menu = page.locator('[data-testid="context-menu"]')
