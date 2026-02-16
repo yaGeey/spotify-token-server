@@ -14,6 +14,11 @@ const PORT = process.env.PORT || 3000
 chromium.use(StealthPlugin())
 const queue = new PQueue({ concurrency: 1 })
 
+// Health check - must be before auth middleware
+app.get('/', (req, res) => {
+   res.send('alive')
+})
+
 app.use((req, res, next) => {
    if (req.headers['authorization'] !== process.env.API_SECRET) {
       return res.status(403).json({ error: 'Wrong Secret Key' })
@@ -25,10 +30,6 @@ if (!process.env.API_SECRET || !process.env.SP_DC || !process.env.SP_KEY) {
    console.error('Error: Missing required environment variables. Please set API_SECRET, SP_DC, and SP_KEY.')
    process.exit(1)
 }
-
-app.get('/', (req, res) => {
-   res.send('alive')
-})
 
 // TODO give userId
 // TODO give sha codes on 401 / !412! error on client. separate route
@@ -105,8 +106,18 @@ app.get('/token', async (req, res) => {
    }
 })
 
-// update hashes
-app.get('/update-hashes', async (req, res) => {
+app.get('/hashes', (req, res) => {
+   const raw = req.query.names as string | undefined
+   if (raw) {
+      const names = raw.split(',')
+      const filtered = Object.fromEntries(Object.entries(store.hashes).filter(([key]) => names.includes(key)))
+      res.json(filtered)
+   } else {
+      res.json(store.hashes)
+   }
+})
+
+app.put('/hashes', async (req, res) => {
    const raw = req.query.names as string
    let hashes: { name: string; hash: string | null }[] = []
 
@@ -118,20 +129,13 @@ app.get('/update-hashes', async (req, res) => {
       const names = raw.split(',')
       for (const name of names) {
          const op = operations.find((o) => o.name === name)
-         if (!op) {
-            if (store.hashes[name]) hashes.push({ name, hash: store.hashes[name]! })
-            continue
-         }
-         if (Boolean(store.hashes[op.name])) {
-            hashes.push({ name: op.name, hash: store.hashes[op.name]! })
-            continue
-         }
+         if (!op) continue
          const hash = await queue.add(() => updateHash(op))
          hashes.push({ name: op.name, hash })
          await delay(800)
       }
       if (hashes.length === 0) {
-         return res.status(400).json({ error: 'No valid operation names provided or do not exists in storage' })
+         return res.status(400).json({ error: 'No valid operation names provided' })
       }
       if (hashes.length !== names.length) {
          return res.status(404).json({ error: 'Some operation names were invalid', details: { raw, hashes } })
@@ -152,7 +156,7 @@ cron.schedule('0 3 * * *', () => {
       await queue.add(async () => {
          const hashes = await updateAllHashes()
          if (hashes.map((h) => h.hash).some((h) => h === null)) {
-            console.error('cron: Failed to update all hashes', hashes)
+            console.error('cron: Failed to update some hashes', hashes)
          }
       })
    }, randomDelay)
