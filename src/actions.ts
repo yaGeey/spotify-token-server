@@ -39,10 +39,10 @@ export const addToPlaylistAction = async (page: Page) => {
    const targetPlaylist = page.getByRole('menuitem', { name: 'TEST', exact: true }).first()
    if (!(await targetPlaylist.isVisible())) {
       await dismissConsentIfPresent(page)
-      await page.getByText('TEST', { exact: true }).first().click()
+      await page.getByText('TEST', { exact: true }).first().click({ force: true, timeout: slowHostTimeoutMs })
    } else {
       await dismissConsentIfPresent(page)
-      await targetPlaylist.click()
+      await targetPlaylist.click({ force: true, timeout: slowHostTimeoutMs })
    }
 
    const addAnywayBtn = page.getByRole('button', { name: 'Add anyway' })

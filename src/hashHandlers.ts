@@ -40,7 +40,7 @@ export async function updateHash(op: Operation) {
                }
                return false
             },
-            { timeout: 60000 },
+            { timeout: 120000 },
          )
          .then((res) => (res.request().postDataJSON()?.extensions?.persistedQuery?.sha256Hash || null) as string | null)
          .catch((err) => {
