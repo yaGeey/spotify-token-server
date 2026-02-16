@@ -138,13 +138,20 @@ app.put('/hashes', async (req, res) => {
          return res.status(400).json({ error: 'No valid operation names provided' })
       }
       if (hashes.length !== names.length) {
-         return res.status(404).json({ error: 'Some operation names were invalid', details: { raw, hashes } })
+         return res
+            .status(404)
+            .json({
+               error: 'Some operation names were invalid',
+               details: { raw, hashes: Object.fromEntries(hashes.map((i) => [i.name, i.hash])) },
+            })
       }
    }
 
    if (hashes.map((h) => h.hash).some((h) => h === null)) {
       console.error('Failed to update some hashes', hashes)
-      return res.status(502).json({ error: 'Failed to update some hashes', details: hashes })
+      return res
+         .status(502)
+         .json({ error: 'Failed to update some hashes', details: Object.fromEntries(hashes.map((i) => [i.name, i.hash])) })
    }
 
    res.json({ requested: Object.fromEntries(hashes.map((i) => [i.name, i.hash])), all: store.hashes })

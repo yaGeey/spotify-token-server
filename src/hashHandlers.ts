@@ -35,7 +35,7 @@ export async function updateHash(op: Operation) {
                }
                return false
             },
-            { timeout: 30000 },
+            { timeout: 60000 },
          )
          .then((res) => (res.request().postDataJSON()?.extensions?.persistedQuery?.sha256Hash || null) as string | null)
 
