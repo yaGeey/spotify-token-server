@@ -27,6 +27,20 @@ export const addToPlaylistAction = async (page: Page) => {
    const track = page.locator('[data-testid="tracklist-row"]').first()
    await track.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
    console.log('track visible')
+
+   // Log track details
+   const trackName = await track
+      .locator('[data-testid="internal-track-link"]')
+      .first()
+      .textContent()
+      .catch(() => 'unknown')
+   const trackArtist = await track
+      .locator('a[href*="/artist/"]')
+      .first()
+      .textContent()
+      .catch(() => 'unknown')
+   console.log(`Track being right-clicked: "${trackName}" by ${trackArtist}`)
+
    await track.click({ button: 'right', timeout: slowHostTimeoutMs })
    console.log('track right-clicked')
 
@@ -69,6 +83,18 @@ export const addToPlaylistAction = async (page: Page) => {
 
    // Wait for UI to settle and check for "Already added" dialog
    await page.waitForTimeout(3000)
+
+   // Log all visible dialogs for debugging
+   const allDialogs = await page.locator('[role="dialog"]').count()
+   console.log(`Number of dialogs visible: ${allDialogs}`)
+   if (allDialogs > 0) {
+      const dialogText = await page
+         .locator('[role="dialog"]')
+         .first()
+         .textContent()
+         .catch(() => 'unable to read')
+      console.log(`Dialog text: ${dialogText}`)
+   }
 
    // Check if "Already added" dialog appeared (only if song was already in playlist)
    const addAnywayBtn = page.getByRole('button', { name: /add anyway/i })
