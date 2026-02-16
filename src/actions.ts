@@ -28,19 +28,6 @@ export const addToPlaylistAction = async (page: Page) => {
    await track.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
    console.log('track visible')
 
-   // Log track details
-   const trackName = await track
-      .locator('[data-testid="internal-track-link"]')
-      .first()
-      .textContent()
-      .catch(() => 'unknown')
-   const trackArtist = await track
-      .locator('a[href*="/artist/"]')
-      .first()
-      .textContent()
-      .catch(() => 'unknown')
-   console.log(`Track being right-clicked: "${trackName}" by ${trackArtist}`)
-
    await track.click({ button: 'right', timeout: slowHostTimeoutMs })
    console.log('track right-clicked')
 
@@ -81,8 +68,16 @@ export const addToPlaylistAction = async (page: Page) => {
    await menu.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => console.log('menu did not hide'))
    console.log('context menu closed')
 
-   // Wait for UI to settle and check for "Already added" dialog
-   await page.waitForTimeout(3000)
+   // Wait for UI to settle
+   await page.waitForTimeout(2000)
+
+   // Dismiss any language selection or other dialogs (not "Already added")
+   const languageDialog = page.locator('[role="dialog"]').filter({ hasText: 'Choose a language' })
+   if (await languageDialog.isVisible().catch(() => false)) {
+      console.log('Language dialog is visible, dismissing it')
+      await page.keyboard.press('Escape').catch(() => {})
+      await page.waitForTimeout(500)
+   }
 
    // Log all visible dialogs for debugging
    const allDialogs = await page.locator('[role="dialog"]').count()
@@ -103,14 +98,11 @@ export const addToPlaylistAction = async (page: Page) => {
    if (isVisible) {
       await addAnywayBtn.click({ timeout: slowHostTimeoutMs })
       console.log('clicked "Add anyway" button')
-      // Wait longer for the addToPlaylist GraphQL operation to fire after clicking
-      console.log('waiting for addToPlaylist operation to fire...')
-      await page.waitForTimeout(15000)
-   } else {
-      // If no dialog, track was added successfully - wait for operation
-      console.log('waiting for addToPlaylist operation to fire...')
-      await page.waitForTimeout(15000)
    }
+
+   // Wait for addToPlaylist operation to fire
+   console.log('waiting for addToPlaylist operation to fire...')
+   await page.waitForTimeout(10000)
 
    console.log('finished addToPlaylistAction')
 }
