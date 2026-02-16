@@ -22,6 +22,8 @@ export async function createInstance() {
       locale: 'en-US',
       timezoneId: 'America/New_York',
       bypassCSP: true,
+      // viewport: { width: 1920, height: 1080 }, // <--- ДОДАЙ ЦЕ
+      deviceScaleFactor: 1,
    })
    await context.addCookies([
       {

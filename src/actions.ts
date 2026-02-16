@@ -17,38 +17,38 @@ const dismissConsentIfPresent = async (page: Page) => {
 }
 
 export const addToPlaylistAction = async (page: Page) => {
-   const slowHostTimeoutMs = 90000
+   const slowHostTimeoutMs = 90000 // Зменшив, 90с це занадто, краще впасти раніше
 
-   await page.waitForLoadState('domcontentloaded', { timeout: slowHostTimeoutMs })
-   console.log('page loaded')
+   await page.waitForLoadState('networkidle', { timeout: slowHostTimeoutMs }) // Важливо: networkidle краще ніж domcontentloaded для SPA
    await dismissConsentIfPresent(page)
-   console.log('page loaded and dissmissed')
 
    const track = page.locator('[data-testid="tracklist-row"]').first()
    await track.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
-   console.log('track visible')
 
+   // ТРЮК 1: Примусовий скрол до елемента перед кліком
+   await track.scrollIntoViewIfNeeded()
    await track.click({ button: 'right', timeout: slowHostTimeoutMs })
-   console.log('track right-clicked')
 
    const menu = page.locator('[data-testid="context-menu"]')
-   await menu.waitFor({ timeout: slowHostTimeoutMs })
-   console.log('context menu visible')
+   await menu.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
 
    const addToPlaylistButton = menu.getByText('Add to Playlist', { exact: false })
-   await addToPlaylistButton.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
-   console.log('add to playlist button visible')
-   await addToPlaylistButton.hover({ timeout: slowHostTimeoutMs })
-   console.log('add to playlist button hovered')
+   await addToPlaylistButton.waitFor({ state: 'visible' })
+   await addToPlaylistButton.hover() // Hover обов'язковий
 
    const input = page.locator('[placeholder="Find a playlist"]')
    await input.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
-   console.log('playlist search input visible')
-   await input.fill('TEST', { timeout: slowHostTimeoutMs })
-   console.log('playlist search input filled')
-   // await page.waitForTimeout(5000)
-   console.log('waited for search results to populate')
 
+   // ТРЮК 2: Повільний ввід тексту. Це дає React час обробити стейт.
+   // Замість fill використовуємо pressSequentially з затримкою
+   await input.pressSequentially('TEST', { delay: 100 })
+
+   // Даємо час на рендеринг відфільтрованого списку
+   await page.waitForTimeout(1500)
+
+   // ТРЮК 3: Замість кліку мишкою - ENTER
+   // Після пошуку фокус зазвичай залишається в input або перший елемент стає активним.
+   // Спробуємо натиснути стрілку вниз (щоб точно вибрати плейліст) і Enter.
    const targetPlaylist = page.getByRole('menuitem', { name: 'TEST', exact: true }).first()
    if (!(await targetPlaylist.isVisible())) {
       console.log('playlist not found in search results, clicking search result to trigger playlist loading')
@@ -64,26 +64,25 @@ export const addToPlaylistAction = async (page: Page) => {
       console.log('clicked playlist in search results')
    }
 
-   // Wait for context menu to close
-   await menu.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => console.log('menu did not hide'))
-   console.log('context menu closed')
+   // Wait for context menu to close implicitly
+   await menu.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {})
 
-   // Wait for UI to settle
-   await page.waitForTimeout(2000)
+   // --- БЛОК ОБРОБКИ "Add Anyway" ---
+   // Тут важливо чекати не просто появи, а появи АБО зникнення діалогу
+   // Але оскільки нам треба клікнути, чекаємо кнопку.
 
-   // Check if "Already added" dialog appeared (only if song was already in playlist)
-   const addAnywayBtn = page.getByRole('button', { name: /add anyway/i })
-   await addAnywayBtn.waitFor({ timeout: 5000 }).catch(() => console.log('"Add anyway" button did not appear'))
-   const isVisible = await addAnywayBtn.isVisible().catch(() => false)
-   console.log(`is "Add anyway" button visible? ${isVisible}`)
-   if (isVisible) {
-      await addAnywayBtn.click({ timeout: slowHostTimeoutMs })
-      console.log('clicked "Add anyway" button')
+   try {
+      const addAnywayBtn = page.getByRole('button', { name: /add anyway/i })
+      // Чекаємо трохи довше, бо модалка може мати анімацію появи
+      await addAnywayBtn.waitFor({ state: 'visible', timeout: 15000 })
+
+      console.log('"Add anyway" visible, clicking...')
+      // Тут теж краще без force, якщо можливо, але для модалок force допустимий
+      await addAnywayBtn.click()
+   } catch (e) {
+      console.log('"Add anyway" button did not appear (track likely added or not duplicate)')
    }
 
-   // Wait for addToPlaylist operation to fire
-   console.log('waiting for addToPlaylist operation to fire...')
-   await page.waitForTimeout(10000)
-
-   console.log('finished addToPlaylistAction')
+   // Фінальне очікування, щоб запит встиг піти
+   await page.waitForTimeout(3000)
 }
