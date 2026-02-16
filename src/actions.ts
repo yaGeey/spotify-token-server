@@ -128,9 +128,20 @@ export const getModifyPlaylistHashAction = async (page: Page, names: string[]): 
 
    if (result.data.playlistV2.content.totalCount === 0) {
       console.log('Playlist is empty, using addToPlaylist flow to get hash')
-      await page.goto('https://open.spotify.com/search/deco27', { waitUntil: 'domcontentloaded' })
-      const addPromise = captureQueryPromise(page, names).catch(() => null)
-      await Promise.all([addPromise, addNotDuplicateItemToPlaylistAction(page)])
+
+      // Close current page and create new one to free RAM
+      const context = page.context()
+      await page.close()
+      const newPage = await context.newPage()
+      await newPage.route('**/*.{png,jpg,jpeg,gif,woff,woff2,sentry}', (r) => r.abort())
+      await newPage.route('**/*{onetrust,i.scdn.co/image/,mosaic.scdn.co/,encore.scdn.co/fonts}*', (r) => r.abort())
+      await newPage.addStyleTag({
+         content: '#onetrust-consent-sdk { display: none !important; pointer-events: none !important; }',
+      })
+
+      await newPage.goto('https://open.spotify.com/search/deco27', { waitUntil: 'domcontentloaded' })
+      const addPromise = captureQueryPromise(newPage, names).catch(() => null)
+      await Promise.all([addPromise, addNotDuplicateItemToPlaylistAction(newPage)])
    } else {
       const removePromise = captureQueryPromise(page, names).catch(() => null)
       await Promise.all([removePromise, removeFromPlaylistAction(page)])
