@@ -29,7 +29,10 @@ export async function updateHash(op: Operation) {
                      const body = res.request().postDataJSON()
                      if (!body) return false
                      const hash = body.extensions?.persistedQuery?.sha256Hash
-                     if (hash) store.hashes[body.operationName] = hash
+                     if (hash) {
+                        console.log(body.operationName)
+                        store.hashes[body.operationName] = hash
+                     }
                      return body.operationName === op.name
                   } catch {
                      return false
@@ -45,7 +48,7 @@ export async function updateHash(op: Operation) {
             return null
          })
 
-      await page.goto(op.url, { waitUntil: 'domcontentloaded', timeout: 60000 })
+      await page.goto(op.url, { waitUntil: 'domcontentloaded', timeout: 90000 })
 
       const actionPromise = op.action
          ? op.action(page).catch((e) => {
