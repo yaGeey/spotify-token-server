@@ -139,7 +139,7 @@ export const getModifyPlaylistHashAction = async (page: Page, names: string[]): 
          content: '#onetrust-consent-sdk { display: none !important; pointer-events: none !important; }',
       })
 
-      await newPage.goto('https://open.spotify.com/search/deco27', { waitUntil: 'domcontentloaded' })
+      await newPage.goto('https://open.spotify.com/search/deco27/tracks', { waitUntil: 'domcontentloaded' })
       const addPromise = captureQueryPromise(newPage, names).catch(() => null)
       await Promise.all([addPromise, addNotDuplicateItemToPlaylistAction(newPage)])
    } else {
