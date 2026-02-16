@@ -1,4 +1,5 @@
 import type { Page } from 'playwright'
+import { captureQueryPromise } from './hashHandlers.js'
 
 const dismissConsentIfPresent = async (page: Page) => {
    const overlay = page.locator('#onetrust-consent-sdk')
@@ -16,81 +17,94 @@ const dismissConsentIfPresent = async (page: Page) => {
    await overlay.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {})
 }
 
-export const addToPlaylistAction = async (page: Page) => {
-   const slowHostTimeoutMs = 90000 // Зменшив, 90с це занадто, краще впасти раніше
+export const addNotDuplicateItemToPlaylistAction = async (page: Page) => {
+   const timeout = 60000 // Зменшив, 90с це занадто, краще впасти раніше
 
-   await page.waitForLoadState('networkidle', { timeout: slowHostTimeoutMs }) // Важливо: networkidle краще ніж domcontentloaded для SPA
+   await page.waitForLoadState('domcontentloaded', { timeout }) // Важливо: networkidle краще ніж domcontentloaded для SPA
    await dismissConsentIfPresent(page)
-   console.log('page loaded')
+   console.log('[a] page loaded')
 
    const track = page.locator('[data-testid="tracklist-row"]').first()
-   await track.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
-   console.log('track found')
+   await track.waitFor({ state: 'visible', timeout })
+   console.log('[a] track found')
 
-   // ТРЮК 1: Примусовий скрол до елемента перед кліком
-   await track.scrollIntoViewIfNeeded()
-   await track.click({ button: 'right', timeout: slowHostTimeoutMs })
-   console.log('right-clicked track')
+   await track.click({ button: 'right', timeout })
+   console.log('[a] right-clicked track')
 
    const menu = page.locator('[data-testid="context-menu"]')
-   await menu.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
-   console.log('context menu visible')
+   await menu.waitFor({ state: 'visible', timeout })
+   console.log('[a] context menu visible')
 
    const addToPlaylistButton = menu.getByText('Add to Playlist', { exact: false })
    await addToPlaylistButton.waitFor({ state: 'visible' })
-   await addToPlaylistButton.hover() // Hover обов'язковий
-   console.log('hovered "Add to Playlist"')
+   await addToPlaylistButton.hover()
+   console.log('[a] hovered "Add to Playlist"')
 
    const input = page.locator('[placeholder="Find a playlist"]')
-   await input.waitFor({ state: 'visible', timeout: slowHostTimeoutMs })
-   console.log('search input visible')
+   await input.waitFor({ state: 'visible', timeout })
+   console.log('[a] search input visible')
 
-   // ТРЮК 2: Повільний ввід тексту. Це дає React час обробити стейт.
-   // Замість fill використовуємо pressSequentially з затримкою
    await input.pressSequentially('TEST', { delay: 100 })
-   console.log('typed playlist name with delay')
+   console.log('[a] typed playlist name with delay')
 
-   // Даємо час на рендеринг відфільтрованого списку
    await page.waitForTimeout(1500)
 
-   // ТРЮК 3: Замість кліку мишкою - ENTER
-   // Після пошуку фокус зазвичай залишається в input або перший елемент стає активним.
-   // Спробуємо натиснути стрілку вниз (щоб точно вибрати плейліст) і Enter.
    const targetPlaylist = page.getByRole('menuitem', { name: 'TEST', exact: true }).first()
    if (!(await targetPlaylist.isVisible())) {
-      console.log('playlist not found in search results, clicking search result to trigger playlist loading')
-      await dismissConsentIfPresent(page)
-      console.log('dissmissed')
-      await page.getByText('TEST', { exact: true }).first().click({ force: true, timeout: slowHostTimeoutMs })
-      console.log('clicked search result, waiting for playlist to appear in search results')
+      console.log('[a] playlist not found in search results, clicking search result to trigger playlist loading')
+      await page.getByText('TEST', { exact: true }).first().click({ force: true, timeout })
+      console.log('[a] clicked search result, waiting for playlist to appear in search results')
    } else {
-      console.log('playlist found in search results, clicking it')
-      await dismissConsentIfPresent(page)
-      console.log('dissmissed')
-      await targetPlaylist.click({ force: true, timeout: slowHostTimeoutMs })
-      console.log('clicked playlist in search results')
+      console.log('[a] playlist found in search results, clicking it')
+      await targetPlaylist.click({ force: true, timeout })
+      console.log('[a] clicked playlist in search results')
    }
 
-   // Wait for context menu to close implicitly
-   await menu.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => { })
-   console.log('context menu closed')
-
-   // --- БЛОК ОБРОБКИ "Add Anyway" ---
-   // Тут важливо чекати не просто появи, а появи АБО зникнення діалогу
-   // Але оскільки нам треба клікнути, чекаємо кнопку.
-
-   try {
-      const addAnywayBtn = page.getByRole('button', { name: /add anyway/i })
-      // Чекаємо трохи довше, бо модалка може мати анімацію появи
-      await addAnywayBtn.waitFor({ state: 'visible', timeout: 15000 })
-
-      console.log('"Add anyway" visible, clicking...')
-      // Тут теж краще без force, якщо можливо, але для модалок force допустимий
-      await addAnywayBtn.click()
-   } catch (e) {
-      console.log('"Add anyway" button did not appear (track likely added or not duplicate)')
-   }
-
-   // Фінальне очікування, щоб запит встиг піти
    await page.waitForTimeout(3000)
+}
+
+export const removeFromPlaylistAction = async (page: Page) => {
+   const timeout = 60000
+
+   await page.waitForLoadState('networkidle', { timeout })
+   console.log('[a] page loaded')
+
+   const track = page.locator('[data-testid="tracklist-row"]').first()
+   await track.waitFor({ state: 'visible', timeout })
+   console.log('[a] track found')
+   const clickZone = track.locator('[aria-colindex="2"]').first()
+   await clickZone.waitFor({ state: 'visible', timeout })
+   console.log('[a] clickZone found')
+
+   await clickZone.click({ button: 'right', timeout })
+   console.log('[a] right-clicked track')
+
+   const menu = page.locator('[data-testid="context-menu"]')
+   await menu.waitFor({ state: 'visible', timeout })
+   console.log('[a] context menu visible')
+
+   const btn = menu.getByText('Remove from this playlist')
+   await btn.waitFor({ state: 'visible', timeout })
+   await btn.click({ timeout })
+   console.log('[a] remove from playlist btn clicked')
+
+   await page.waitForTimeout(3000)
+}
+
+// fetchPlaylist + modify hashes + (possibly search)
+export const getModifyPlaylistHashAction = async (page: Page): Promise<void> => {
+   await page.goto('https://open.spotify.com/playlist/6uXwlbGoEnIQT9Cu5RsuxP', {
+      waitUntil: 'domcontentloaded',
+   })
+   const queryData = await captureQueryPromise(page, ['fetchPlaylist'])
+   const result = queryData?.json
+   if (!result) throw new Error('No data in fetchPlaylist response')
+
+   if (result.data.playlistV2.content.totalCount === 0) {
+      console.log('Playlist is empty, using addToPlaylist flow to get hash')
+      await page.goto('https://open.spotify.com/search/deco27', { waitUntil: 'domcontentloaded' })
+      return addNotDuplicateItemToPlaylistAction(page)
+   } else {
+      return removeFromPlaylistAction(page)
+   }
 }

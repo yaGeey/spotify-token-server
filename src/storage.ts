@@ -8,14 +8,22 @@ export type TokenResponse = {
    client: ClientTokenResponse
 }
 
-export type Operation = {
-   name: string
-   url: string
-   action?: (page: Page) => Promise<void>
-}
-type Hashes = Record<string, string | null>
+export type Operation = (
+   | {
+        type?: never
+        url: string
+        action?: (page: Page) => Promise<void>
+     }
+   | {
+        type: 'action'
+        action: (page: Page) => Promise<void>
+     }
+) & { names: [string, ...string[]] }
+
+export type Hashes = Record<string, string | null>
 export const store = {
    access: null as AccessTokenResponse | null,
    client: null as ClientTokenResponse | null,
    hashes: {} as Hashes,
+   tempHashes: {} as Hashes,
 }

@@ -62,3 +62,16 @@ export async function killBrowser(browser: Browser | null) {
    if (browser) await browser.close().catch(() => {})
    if (global.gc) global.gc() // force garbage collection to free RAM
 }
+
+export async function browserWrapper<T>(fn: (page: Page) => Promise<T>) {
+   const { browser, page } = await createInstance()
+   try {
+      const data = await fn(page)
+      return data
+   } catch (err) {
+      await handleError(err)
+      return null
+   } finally {
+      killBrowser(browser)
+   }
+}

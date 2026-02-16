@@ -2,15 +2,15 @@ import express from 'express'
 import 'dotenv/config'
 import PQueue from 'p-queue'
 import cron from 'node-cron'
-import { store, type AccessTokenResponse, type TokenResponse } from './storage.js'
-import { createInstance, killBrowser, handleError } from './browser.js'
+import { store, type AccessTokenResponse, type Hashes, type TokenResponse } from './storage.js'
+import { createInstance, killBrowser, handleError, browserWrapper } from './browser.js'
 import { delay } from './utils.js'
 import { updateAllHashes, operations, updateHash } from './hashHandlers.js'
 import type { Browser } from 'playwright'
 
 const app = express()
 const PORT = process.env.PORT || 3000
-const queue = new PQueue({ concurrency: 1 })
+export const queue: PQueue = new PQueue({ concurrency: 1 })
 
 // Health check - must be before auth middleware
 app.get('/', (req, res) => {
@@ -121,40 +121,49 @@ app.get('/hashes', (req, res) => {
 
 app.put('/hashes', async (req, res) => {
    const raw = req.query.names as string
-   let hashes: { name: string; hash: string | null }[] = []
+   let tempHash = store.tempHashes
 
-   if (!raw) {
+   const names = raw ? raw.split(',') : null
+
+   if (!names) {
       // update all
-      hashes = await queue.add(updateAllHashes)
+      tempHash = await updateAllHashes()
    } else {
       // update selected
-      const names = raw.split(',')
       for (const name of names) {
-         const op = operations.find((o) => o.name === name)
-         if (!op) continue
-         const hash = await queue.add(() => updateHash(op))
-         hashes.push({ name: op.name, hash })
+         const op = operations.find((o) => o.names.includes(name))
+         if (!op || op.names.every((name) => tempHash[name])) {
+            console.log(`Skipping ${name}`)
+            continue
+         }
+
+         const hash = await queue.add(() => browserWrapper((page) => updateHash(page, op)))
+         // Record hash for ALL names in the operation
+         console.log(`Hash for ${op.names.join(', ')}: ${hash}`)
+         for (const opName of op.names) tempHash[opName] = hash
          await delay(800)
       }
-      if (hashes.length === 0) {
+      const hashesAmount = Object.keys(tempHash).length
+      if (hashesAmount === 0) {
          return res.status(400).json({ error: 'No valid operation names provided' })
       }
-      if (hashes.length !== names.length) {
+      if (names.some((name) => !operations.some((op) => op.names.includes(name)))) {
          return res.status(404).json({
             error: 'Some operation names were invalid',
-            details: { raw, hashes: Object.fromEntries(hashes.map((i) => [i.name, i.hash])) },
+            details: { raw, hashes: tempHash },
          })
       }
    }
 
-   if (hashes.map((h) => h.hash).some((h) => h === null)) {
-      console.error('Failed to update some hashes', hashes)
-      return res
-         .status(502)
-         .json({ error: 'Failed to update some hashes', details: Object.fromEntries(hashes.map((i) => [i.name, i.hash])) })
+   if (Object.keys(tempHash).some((key) => tempHash[key] === null)) {
+      console.error('Failed to update some hashes', tempHash)
+      return res.status(502).json({ error: 'Failed to update some hashes', details: tempHash })
    }
 
-   res.json({ requested: Object.fromEntries(hashes.map((i) => [i.name, i.hash])), all: store.hashes })
+   store.tempHashes = {}
+   Object.assign(store.hashes, tempHash)
+   const requested = Object.fromEntries(Object.entries(store.hashes).filter(([key, value]) => names?.includes(key) && value))
+   res.json({ requested, all: store.hashes })
 })
 
 cron.schedule('0 3 * * *', () => {
@@ -162,7 +171,7 @@ cron.schedule('0 3 * * *', () => {
    setTimeout(async () => {
       await queue.add(async () => {
          const hashes = await updateAllHashes()
-         if (hashes.map((h) => h.hash).some((h) => h === null)) {
+         if (Object.keys(hashes).some((key) => hashes[key] === null)) {
             console.error('cron: Failed to update some hashes', hashes)
          }
       })

@@ -1,77 +1,87 @@
-import { addToPlaylistAction } from './actions.js'
-import { createInstance, killBrowser, handleError } from './browser.js'
+import type { Page } from 'playwright'
+import { browserWrapper } from './browser.js'
 import { type Operation, store } from './storage.js'
 import { delay } from './utils.js'
+import { getModifyPlaylistHashAction } from './actions.js'
+import { queue } from './index.js'
 
 export const operations: Operation[] = [
-   { name: 'fetchPlaylist', url: 'https://open.spotify.com/playlist/79QHayucQm6M4wUlUbhQNQ' },
    {
-      name: 'searchDesktop',
-      url: `https://open.spotify.com/search/deco27/tracks`,
+      type: 'action',
+      names: ['addToPlaylist', 'removeFromPlaylist'],
+      action: getModifyPlaylistHashAction,
    },
+   { names: ['fetchPlaylist'], url: 'https://open.spotify.com/playlist/79QHayucQm6M4wUlUbhQNQ' },
    {
-      name: 'addToPlaylist',
-      url: 'https://open.spotify.com/search/deco27/tracks',
-      action: addToPlaylistAction,
+      names: ['searchDesktop'],
+      url: `https://open.spotify.com/search/deco27/tracks`,
    },
 ]
 
-export async function updateHash(op: Operation) {
-   const { browser, page } = await createInstance()
-
-   try {
-      const hashPromise = page
-         .waitForResponse(
-            async (res) => {
-               const url = res.url()
-               if (url.includes('query') || (url.includes('graphql') && res.status() === 200)) {
-                  try {
-                     const body = res.request().postDataJSON()
-                     if (!body) return false
-                     const hash = body.extensions?.persistedQuery?.sha256Hash
-                     if (hash) {
-                        console.log(body.operationName)
-                        store.hashes[body.operationName] = hash
-                     }
-                     return body.operationName === op.name
-                  } catch {
-                     return false
+export async function captureQueryPromise(page: Page, operationNames: string[]) {
+   const res = await page.waitForResponse(
+      async (res) => {
+         const url = res.url()
+         if (url.includes('query') || (url.includes('graphql') && res.status() === 200)) {
+            try {
+               const body = res.request().postDataJSON()
+               if (!body) return false
+               const hash = body.extensions?.persistedQuery?.sha256Hash
+               if (hash) {
+                  console.log(body.operationName)
+                  store.hashes[body.operationName] = hash
+                  // Record hash for ALL operation names since they share the same hash
+                  for (const name of operationNames) {
+                     store.tempHashes[name] = hash
                   }
                }
+               return operationNames.includes(body.operationName)
+            } catch {
                return false
-            },
-            { timeout: 150000 },
-         )
-         .then((res) => (res.request().postDataJSON()?.extensions?.persistedQuery?.sha256Hash || null) as string | null)
-         .catch((err) => {
-            console.warn(`⚠️ [${op.name}] Hash listener ended: ${err.message}`)
-            return null
-         })
+            }
+         }
+         return false
+      },
+      { timeout: 150000 },
+   )
 
-      await page.goto(op.url, { waitUntil: 'domcontentloaded', timeout: 120000 })
+   const hash = (res.request().postDataJSON()?.extensions?.persistedQuery?.sha256Hash || null) as string | null
+   const json = await res.json().catch(() => null)
 
-      const actionPromise = op.action
-         ? op.action(page).catch((e) => {
-              throw new Error(`Action failed: ${e.message}`)
-           })
-         : Promise.resolve()
+   return { hash, json: operationNames.length === 1 ? json : null }
+}
 
-      const [hash] = await Promise.all([hashPromise, actionPromise])
-      return hash
-   } catch (err) {
-      handleError(err)
+export async function updateHash(page: Page, op: Operation) {
+   // For URL-based operations
+   const queryPromise = captureQueryPromise(page, op.names).catch((err) => {
+      console.warn(`⚠️ [${op.names}] Hash listener ended: ${err.message}`)
       return null
-   } finally {
-      await killBrowser(browser)
-   }
+   })
+
+   if (op.type !== 'action') await page.goto(op.url, { waitUntil: 'domcontentloaded', timeout: 120000 })
+
+   const actionPromise = op.action
+      ? op.action(page).catch((e) => {
+           throw new Error(`Action failed: ${e.message}`)
+        })
+      : Promise.resolve()
+
+   await Promise.all([queryPromise, actionPromise])
+   return store.tempHashes[op.names[0]] || null
 }
 
 export async function updateAllHashes() {
-   const res = []
+   const res: Record<string, string | null> = {}
+   store.tempHashes = {}
+
    for (const op of operations) {
-      const hash = await updateHash(op)
-      res.push({ name: op.name, hash })
+      // if we already have hashes from previos operations, we can skip
+      if (op.names.every((name) => store.tempHashes[name])) continue
+      const hash = await queue.add(() => browserWrapper((page) => updateHash(page, op)))
+      op.names.forEach((name) => (res[name] = hash))
       await delay(800)
    }
+
+   store.tempHashes = {}
    return res
 }
