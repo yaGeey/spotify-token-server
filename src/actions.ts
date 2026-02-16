@@ -63,13 +63,16 @@ export const addToPlaylistAction = async (page: Page) => {
       console.log('clicked playlist in search results')
    }
 
-   // "Add anyway" button only appears if song is already in playlist
+   // Wait for "Already added" dialog or the button to appear (if song is already in playlist)
+   await page.waitForTimeout(5000)
    const addAnywayBtn = page.getByRole('button', { name: 'Add anyway' })
-   const isAddAnywayVisible = await addAnywayBtn.isVisible().catch(() => false)
-   console.log(`is "Add anyway" button visible? ${isAddAnywayVisible}`)
-   if (isAddAnywayVisible) {
+   try {
+      await addAnywayBtn.waitFor({ state: 'visible', timeout: 15000 })
+      console.log('is "Add anyway" button visible? true')
       await addAnywayBtn.click({ timeout: slowHostTimeoutMs })
       console.log('clicked "Add anyway" button')
+   } catch {
+      console.log('is "Add anyway" button visible? false')
    }
 
    // Wait a bit for the GraphQL request to fire
