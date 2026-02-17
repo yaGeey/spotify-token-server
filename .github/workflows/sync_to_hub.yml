@@ -1,19 +1,26 @@
-name: Sync with Hugging Face Hub
+name: Sync to Hugging Face Hub
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
-  build:
+  sync-to-hub:
     runs-on: ubuntu-latest
     steps:
-    - name: Sync with Hugging Face
-      uses: nateraw/huggingface-sync-action@v0.0.5
-      with:
-        github_repo_id: yaGeey/spotify-token-server
-        huggingface_repo_id: nutipaaa/spotify-api-server
-        repo_type: space
-        space_sdk: docker
-        hf_token: ${{ secrets.HF_TOKEN }}
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: nutipaaa
+          HF_SPACE_NAME: spotify-api-server
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          git remote add space https://$HF_USERNAME:$HF_TOKEN@huggingface.co/spaces/$HF_USERNAME/$HF_SPACE_NAME
+          git push --force space main:main
