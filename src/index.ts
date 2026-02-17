@@ -1,19 +1,16 @@
 import express from 'express'
 import 'dotenv/config'
 import PQueue from 'p-queue'
-import cron from 'node-cron'
-import { store, type AccessTokenResponse, type Hashes, type TokenResponse } from './storage.js'
-import { createInstance, killBrowser, handleError, browserWrapper } from './browser.js'
+import { store, type AccessTokenResponse, type TokenResponse } from './storage.js'
+import { handleError, closeContexts, withPage } from './browser.js'
 import { delay } from './utils.js'
 import { updateAllHashes, operations, updateHash } from './hashHandlers.js'
-import type { Browser } from 'playwright'
-import chalk from 'chalk'
+import './cronjobs.js'
 
 const app = express()
 const PORT = process.env.PORT || 3000
 export const queue: PQueue = new PQueue({ concurrency: 1 })
 
-// Health check - must be before auth middleware
 app.get('/', (req, res) => {
    res.send('alive')
 })
@@ -43,24 +40,20 @@ function isTokenValid(): boolean {
 }
 
 app.get('/token', async (req, res) => {
-   let exBrowser: Browser | null = null
-   try {
-      // return token if valid
+   // return token if valid
+   if (isTokenValid()) {
+      console.log('Returning cached data')
+      return res.json({ access: store.access!, client: store.client! } satisfies TokenResponse)
+   }
+
+   const result = await queue.add(async () => {
+      // if there was a request before, check it's result before making new one
       if (isTokenValid()) {
          console.log('Returning cached data')
-         return res.json({ access: store.access!, client: store.client! } satisfies TokenResponse)
+         return { access: store.access!, client: store.client! } satisfies TokenResponse
       }
 
-      const result = await queue.add(async (): Promise<TokenResponse> => {
-         // if there was a request before, check it's result before making new one
-         if (isTokenValid()) {
-            console.log('Returning cached data')
-            return { access: store.access!, client: store.client! } satisfies TokenResponse
-         }
-
-         const { browser, page } = await createInstance()
-         exBrowser = browser
-
+      return await withPage<TokenResponse>(async (page) => {
          // access token
          const accessTokenPromise = page
             .waitForResponse(async (res) => res.url().includes('https://open.spotify.com/api/token') && res.status() === 200)
@@ -99,14 +92,10 @@ app.get('/token', async (req, res) => {
          }
          return { access: store.access!, client: store.client! } satisfies TokenResponse
       })
+   })
+   if (!result) throw new Error('Failed to obtain token')
 
-      killBrowser(exBrowser)
-      res.json(result)
-   } catch (err) {
-      const details = handleError(err)
-      killBrowser(exBrowser)
-      res.status(500).json({ error: 'Failed to get token', details })
-   }
+   res.json(result)
 })
 
 app.get('/hashes', (req, res) => {
@@ -138,7 +127,7 @@ app.put('/hashes', async (req, res) => {
             continue
          }
 
-         const hash = await queue.add(() => browserWrapper((page) => updateHash(page, op)))
+         const hash = await queue.add(() => withPage((page) => updateHash(page, op)))
          // Record hash for ALL names in the operation
          for (const opName of op.names) tempHash[opName] = hash
          await delay(800)
@@ -166,16 +155,13 @@ app.put('/hashes', async (req, res) => {
    res.json({ requested, all: store.hashes })
 })
 
-cron.schedule('0 3 * * *', () => {
-   const randomDelay = Math.floor(Math.random() * 1000 * 60 * 60 * 2)
-   setTimeout(async () => {
-      await queue.add(async () => {
-         const hashes = await updateAllHashes()
-         if (Object.keys(hashes).some((key) => hashes[key] === null)) {
-            console.error('cron: Failed to update some hashes', hashes)
-         }
-      })
-   }, randomDelay)
+// middleware --next-> failed route --next(err?)-> error handler
+app.use(async (err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+   await closeContexts(store.browser)
+   const details = handleError(err)
+   if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal server error', details })
+   }
 })
 
 app.listen(PORT, () => {

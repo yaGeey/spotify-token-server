@@ -1,4 +1,4 @@
-import type { Page } from 'playwright'
+import type { Browser, BrowserContext, Page } from 'playwright'
 
 export type AccessTokenResponse = { clientId: string; accessToken: string; accessTokenExpirationTimestampMs: number }
 export type ClientTokenResponse = { expiresAt: number; token: string; version: string }
@@ -26,4 +26,5 @@ export const store = {
    client: null as ClientTokenResponse | null,
    hashes: {} as Hashes,
    tempHashes: {} as Hashes,
+   browser: null as Browser | null,
 }

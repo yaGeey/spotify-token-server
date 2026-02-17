@@ -1,32 +1,15 @@
 import type { Browser, BrowserContext, Page } from 'playwright'
 import { chromium } from 'playwright-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
+import { store } from './storage.js'
 
 chromium.use(StealthPlugin())
 
-export async function createInstance() {
-   console.log(`-> Launching browser`)
-   const browser = await chromium.launch({
-      headless: true,
-      args: [
-         '--disable-dev-shm-usage',
-         '--no-sandbox',
-         '--disable-setuid-sandbox',
-         '--disable-gpu',
-         '--no-first-run',
-         '--mute-audio',
-         '--js-flags=--max-old-space-size=512',
-         '--disable-background-networking',
-         '--disable-background-timer-throttling',
-         '--disable-backgrounding-occluded-windows',
-         '--disable-renderer-backgrounding',
-      ],
-   })
+const createContext = async (browser: Browser) => {
    const context = await browser.newContext({
       locale: 'en-US',
       timezoneId: 'America/New_York',
       bypassCSP: true,
-      // viewport: { width: 1920, height: 1080 }, // <--- ДОДАЙ ЦЕ
       deviceScaleFactor: 1,
    })
    await context.addCookies([
@@ -49,19 +32,56 @@ export async function createInstance() {
          sameSite: 'None',
       },
    ])
+   return context
+}
+
+export const createPageFromBrowser = async (browser: Browser) => {
+   const context = await createContext(browser)
    const page = await context.newPage()
    await page.route('**/*.{png,jpg,jpeg,gif,woff,woff2,sentry}', (r) => r.abort())
    await page.route('**/*{onetrust,i.scdn.co/image/,mosaic.scdn.co/,encore.scdn.co/fonts}*', (r) => r.abort())
-
-   // Hide OneTrust consent with CSS
-   await page.addStyleTag({
-      content: '#onetrust-consent-sdk { display: none !important; pointer-events: none !important; }',
-   })
-
-   return { browser, context, page }
+   return page
 }
 
-export async function handleError(error: unknown) {
+let browserPromise: Promise<Browser> | null = null
+export async function ensureBrowser(): Promise<Browser> {
+   if (browserPromise) {
+      const b = await browserPromise.catch(() => null)
+      if (!b || !b.isConnected()) {
+         browserPromise = null
+         store.browser = null
+      }
+   }
+
+   if (!browserPromise) {
+      browserPromise = (async () => {
+         const b = await chromium.launch({
+            headless: true,
+            args: ['--disable-dev-shm-usage', '--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
+         })
+         b.on('disconnected', () => {
+            console.warn('Browser disconnected')
+            browserPromise = null
+            store.browser = null
+         })
+         return b
+      })()
+   }
+
+   const browser = await browserPromise
+   store.browser = browser
+   return browser
+}
+
+export async function restartBrowser() {
+   if (store.browser) {
+      await store.browser.close()
+      store.browser = null
+   }
+   return ensureBrowser()
+}
+
+export function handleError(error: unknown) {
    const details = error instanceof Error ? error.message : 'Unknown error'
    console.error('💥 Error:', details)
    return details
@@ -69,25 +89,34 @@ export async function handleError(error: unknown) {
 
 export async function killBrowser(browser: Browser | null) {
    console.log(`<- Closing browser`)
+   if (browser) await browser.close().catch(() => {})
+}
+
+export async function closeContexts(browser: Browser | null) {
+   console.log(`<- Closing contexts`)
    if (browser) {
       const contexts = browser.contexts()
       for (const context of contexts) {
          await context.close().catch(() => {})
       }
-      await browser.close().catch(() => {})
    }
-   if (global.gc) global.gc() // force garbage collection to free RAM
 }
 
-export async function browserWrapper<T>(fn: (page: Page) => Promise<T>) {
-   const { browser, page } = await createInstance()
+export async function withPage<T>(fn: (page: Page) => Promise<T>): Promise<T | null> {
+   let page: Page | null = null
    try {
-      const data = await fn(page)
-      return data
+      const browser = await ensureBrowser()
+      page = await createPageFromBrowser(browser)
+      return await fn(page)
    } catch (err) {
-      await handleError(err)
+      handleError(err)
       return null
    } finally {
-      killBrowser(browser)
+      if (page) {
+         await page
+            .context()
+            .close()
+            .catch(() => {})
+      }
    }
 }

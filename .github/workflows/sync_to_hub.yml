@@ -11,14 +11,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          lfs: true
+          fetch-depth: 0 # Fetch all history for all branches and tags
+          lfs: true 
 
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_USERNAME: nutipaaa
           HF_SPACE_NAME: spotify-api-server
+
+        # configure a fake user to push to the hub 
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
