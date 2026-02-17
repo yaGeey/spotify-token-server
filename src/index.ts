@@ -7,6 +7,7 @@ import { createInstance, killBrowser, handleError, browserWrapper } from './brow
 import { delay } from './utils.js'
 import { updateAllHashes, operations, updateHash } from './hashHandlers.js'
 import type { Browser } from 'playwright'
+import chalk from 'chalk'
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -139,7 +140,6 @@ app.put('/hashes', async (req, res) => {
 
          const hash = await queue.add(() => browserWrapper((page) => updateHash(page, op)))
          // Record hash for ALL names in the operation
-         console.log(`Hash for ${op.names.join(', ')}: ${hash}`)
          for (const opName of op.names) tempHash[opName] = hash
          await delay(800)
       }

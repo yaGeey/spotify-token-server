@@ -2,15 +2,21 @@ import type { Page } from 'playwright'
 import { browserWrapper } from './browser.js'
 import { type Operation, store } from './storage.js'
 import { delay } from './utils.js'
-import { getModifyPlaylistHashAction } from './actions.js'
+import { addToPlaylistAction, getModifyPlaylistHashAction } from './actions.js'
 import { queue } from './index.js'
+import chalk from 'chalk'
 
 export const operations: Operation[] = [
    {
-      type: 'action',
       names: ['addToPlaylist', 'removeFromPlaylist'],
-      action: getModifyPlaylistHashAction,
+      url: 'https://open.spotify.com/search/deco27/tracks',
+      action: addToPlaylistAction,
    },
+   // {
+   //    type: 'action',
+   //    names: ['addToPlaylist', 'removeFromPlaylist'],
+   //    action: getModifyPlaylistHashAction,
+   // },
    { names: ['fetchPlaylist'], url: 'https://open.spotify.com/playlist/79QHayucQm6M4wUlUbhQNQ' },
    {
       names: ['searchDesktop'],
@@ -52,6 +58,7 @@ export async function captureQueryPromise(page: Page, operationNames: string[]) 
 }
 
 export async function updateHash(page: Page, op: Operation) {
+   console.log(chalk.blue(`Updating hash for ${op.names.join(', ')}`))
    if (op.type === 'action') {
       // For action-based operations, the action handles everything including capturing hashes
       await op.action(page, op.names).catch((e) => {
@@ -78,7 +85,10 @@ export async function updateHash(page: Page, op: Operation) {
       : Promise.resolve()
 
    await Promise.all([queryPromise, actionPromise])
-   return store.tempHashes[op.names[0]] || null
+
+   const hash = store.tempHashes[op.names[0]] || null
+   console.log(chalk.green(`Hash for ${op.names.join(', ')}: ${hash}`))
+   return hash
 }
 
 export async function updateAllHashes() {

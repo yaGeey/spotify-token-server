@@ -36,54 +36,19 @@ const dismissConsentIfPresent = async (page: Page) => {
    await overlay.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {})
 }
 
-export const addNotDuplicateItemToPlaylistAction = async (page: Page) => {
-   const timeout = 60000 // Зменшив, 90с це занадто, краще впасти раніше
-
-   await page.waitForLoadState('domcontentloaded', { timeout }) // Важливо: networkidle краще ніж domcontentloaded для SPA
-   await dismissConsentIfPresent(page)
-   console.log('[a] page loaded')
-
+export const addToPlaylistAction = async (page: Page) => {
+   await page.waitForLoadState('domcontentloaded')
    const track = page.locator('[data-testid="tracklist-row"]').first()
-   await track.waitFor({ state: 'visible', timeout })
-   console.log('[a] track found')
-
-   await dismissConsentIfPresent(page)
-   await track.click({ button: 'right', timeout, force: true })
-   console.log('[a] right-clicked track')
-
+   await track.click({ button: 'right' })
    const menu = page.locator('[data-testid="context-menu"]')
-   await menu.waitFor({ state: 'visible', timeout })
-   console.log('[a] context menu visible')
-   await dismissConsentIfPresent(page)
-
    const addToPlaylistButton = menu.getByText('Add to Playlist', { exact: false })
-   await addToPlaylistButton.waitFor({ state: 'visible' })
    await addToPlaylistButton.hover()
-   console.log('[a] hovered "Add to Playlist"')
-   await dismissConsentIfPresent(page)
-
    const input = page.locator('[placeholder="Find a playlist"]')
-   await input.waitFor({ state: 'visible', timeout })
-   console.log('[a] search input visible')
-
-   await input.pressSequentially('TEST', { delay: 100 })
-   console.log('[a] typed playlist name with delay')
-   await dismissConsentIfPresent(page)
-
-   await page.waitForTimeout(1500)
-
+   await input.pressSequentially('TEST')
    const targetPlaylist = page.getByRole('menuitem', { name: 'TEST', exact: true }).first()
-   if (!(await targetPlaylist.isVisible())) {
-      console.log('[a] playlist not found in search results, clicking search result to trigger playlist loading')
-      await page.getByText('TEST', { exact: true }).first().click({ force: true, timeout })
-      console.log('[a] clicked search result, waiting for playlist to appear in search results')
-   } else {
-      console.log('[a] playlist found in search results, clicking it')
-      await targetPlaylist.click({ force: true, timeout })
-      console.log('[a] clicked playlist in search results')
-   }
-
-   await page.waitForTimeout(3000)
+   await targetPlaylist.click()
+   const addAnywayBtn = page.getByRole('button', { name: 'Add anyway' })
+   await addAnywayBtn.click()
 }
 
 export const removeFromPlaylistAction = async (page: Page) => {
@@ -141,7 +106,7 @@ export const getModifyPlaylistHashAction = async (page: Page, names: string[]): 
 
       await newPage.goto('https://open.spotify.com/search/deco27/tracks', { waitUntil: 'domcontentloaded' })
       const addPromise = captureQueryPromise(newPage, names).catch(() => null)
-      await Promise.all([addPromise, addNotDuplicateItemToPlaylistAction(newPage)])
+      await Promise.all([addPromise, addToPlaylistAction(newPage)])
    } else {
       const removePromise = captureQueryPromise(page, names).catch(() => null)
       await Promise.all([removePromise, removeFromPlaylistAction(page)])
