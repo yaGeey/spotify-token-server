@@ -2,6 +2,7 @@ import type { Browser, BrowserContext, Page } from 'playwright'
 import { chromium } from 'playwright-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth'
 import { store } from './storage.js'
+import { logMemory } from './utils.js'
 
 chromium.use(StealthPlugin())
 
@@ -118,5 +119,6 @@ export async function withPage<T>(fn: (page: Page) => Promise<T>): Promise<T | n
             .close()
             .catch(() => {})
       }
+      logMemory('Context closed')
    }
 }

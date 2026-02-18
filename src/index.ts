@@ -3,13 +3,19 @@ import 'dotenv/config'
 import PQueue from 'p-queue'
 import { store, type AccessTokenResponse, type TokenResponse } from './storage.js'
 import { handleError, closeContexts, withPage } from './browser.js'
-import { delay } from './utils.js'
+import { delay, logMemory } from './utils.js'
 import { updateAllHashes, operations, updateHash } from './hashHandlers.js'
 import './cronjobs.js'
 
 const app = express()
 const PORT = process.env.PORT || 3000
 export const queue: PQueue = new PQueue({ concurrency: 1 })
+
+app.use((req, res, next) => {
+   logMemory(`--> Start ${req.method} ${req.url}`)
+   res.on('finish', () => logMemory(`<-- End ${req.method} ${req.url}`))
+   next()
+})
 
 app.get('/', (req, res) => {
    res.send('alive')
@@ -46,60 +52,63 @@ app.get('/token', async (req, res) => {
       return res.json({ access: store.access!, client: store.client! } satisfies TokenResponse)
    }
 
-   const result = await queue.add(async () => {
-      // if there was a request before, check it's result before making new one
-      if (isTokenValid()) {
-         console.log('Returning cached data')
-         return { access: store.access!, client: store.client! } satisfies TokenResponse
-      }
-
-      return await withPage<TokenResponse>(async (page) => {
-         // access token
-         const accessTokenPromise = page
-            .waitForResponse(async (res) => res.url().includes('https://open.spotify.com/api/token') && res.status() === 200)
-            .then(async (res) => res.json() as Promise<AccessTokenResponse>)
-
-         // client token
-         const clientTokenPromise = page
-            .waitForResponse(
-               async (res) => res.url().includes('https://clienttoken.spotify.com/v1/clienttoken') && res.status() === 200,
-            )
-            .then(async (res) => {
-               const json = await res.json().catch(() => null)
-               const req = res.request()
-               const payload = req.postDataJSON()
-
-               return {
-                  ...json.granted_token,
-                  client_version: payload.client_data.client_version,
-               }
-            })
-
-         // get tokens
-         const [accessTokenRes, clientTokenRes] = await Promise.all([
-            accessTokenPromise,
-            clientTokenPromise,
-            page.goto('https://open.spotify.com/', { waitUntil: 'domcontentloaded', timeout: 60000 }),
-         ])
-         console.log('Token obtained successfully')
-
-         // format data
-         store.access = accessTokenRes
-         store.client = {
-            expiresAt: Date.now() + clientTokenRes.refresh_after_seconds * 1000,
-            token: clientTokenRes.token,
-            version: clientTokenRes.client_version,
+   const result = await queue.add(
+      async () => {
+         // if there was a request before, check it's result before making new one
+         if (isTokenValid()) {
+            console.log('Returning cached data')
+            return { access: store.access!, client: store.client! } satisfies TokenResponse
          }
-         return { access: store.access!, client: store.client! } satisfies TokenResponse
-      })
-   })
+
+         return await withPage<TokenResponse>(async (page) => {
+            // access token
+            const accessTokenPromise = page
+               .waitForResponse(async (res) => res.url().includes('https://open.spotify.com/api/token') && res.status() === 200)
+               .then(async (res) => res.json() as Promise<AccessTokenResponse>)
+
+            // client token
+            const clientTokenPromise = page
+               .waitForResponse(
+                  async (res) => res.url().includes('https://clienttoken.spotify.com/v1/clienttoken') && res.status() === 200,
+               )
+               .then(async (res) => {
+                  const json = await res.json().catch(() => null)
+                  const req = res.request()
+                  const payload = req.postDataJSON()
+
+                  return {
+                     ...json.granted_token,
+                     client_version: payload.client_data.client_version,
+                  }
+               })
+
+            // get tokens
+            const [accessTokenRes, clientTokenRes] = await Promise.all([
+               accessTokenPromise,
+               clientTokenPromise,
+               page.goto('https://open.spotify.com/', { waitUntil: 'domcontentloaded', timeout: 60000 }),
+            ])
+            console.log('Token obtained successfully')
+
+            // format data
+            store.access = accessTokenRes
+            store.client = {
+               expiresAt: Date.now() + clientTokenRes.refresh_after_seconds * 1000,
+               token: clientTokenRes.token,
+               version: clientTokenRes.client_version,
+            }
+            return { access: store.access!, client: store.client! } satisfies TokenResponse
+         })
+      },
+      { priority: 1 },
+   )
    if (!result) throw new Error('Failed to obtain token')
 
    res.json(result)
 })
 
 app.get('/hashes', (req, res) => {
-   const raw = req.query.names as string | undefined
+   const raw = String(req.query.names || '')
    if (raw) {
       const names = raw.split(',')
       const filtered = Object.fromEntries(Object.entries(store.hashes).filter(([key]) => names.includes(key)))
@@ -110,7 +119,7 @@ app.get('/hashes', (req, res) => {
 })
 
 app.put('/hashes', async (req, res) => {
-   const raw = req.query.names as string
+   const raw = String(req.query.names || '')
    let tempHash = store.tempHashes
 
    const names = raw ? raw.split(',') : null
