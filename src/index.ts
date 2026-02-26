@@ -79,6 +79,7 @@ app.get('/token', async (req, res) => {
                   return {
                      ...json.granted_token,
                      client_version: payload.client_data.client_version,
+                     // headers: req.headers(),
                   }
                })
 
@@ -97,6 +98,7 @@ app.get('/token', async (req, res) => {
                token: clientTokenRes.token,
                version: clientTokenRes.client_version,
             }
+            // store.headers = clientTokenRes.headers
             return { access: store.access!, client: store.client! } satisfies TokenResponse
          })
       },
@@ -107,6 +109,7 @@ app.get('/token', async (req, res) => {
    res.json(result)
 })
 
+// TODO handle 404
 app.get('/hashes', (req, res) => {
    const raw = String(req.query.names || '')
    if (raw) {
@@ -173,6 +176,6 @@ app.use(async (err: unknown, req: express.Request, res: express.Response, next: 
    }
 })
 
-app.listen(PORT, () => {
-   console.log(`Server running on port ${PORT}`)
+app.listen(PORT as number, '0.0.0.0', () => {
+   console.log(`Server running on port ${PORT} at 0.0.0.0`)
 })
