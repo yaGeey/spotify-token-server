@@ -8,7 +8,6 @@ import { updateAllHashes, operations, updateHash } from './hashHandlers.js'
 import './cronjobs.js'
 
 const app = express()
-const PORT = process.env.PORT || 3000
 export const queue: PQueue = new PQueue({ concurrency: 1 })
 
 app.use((req, res, next) => {
@@ -176,6 +175,22 @@ app.use(async (err: unknown, req: express.Request, res: express.Response, next: 
    }
 })
 
-app.listen(PORT as number, '0.0.0.0', () => {
-   console.log(`Server running on port ${PORT} at 0.0.0.0`)
+// TypeScript / Node.js
+const portRaw = process.env.PORT ?? "3000";
+const PORT = Number.parseInt(portRaw, 10);
+
+if (!Number.isFinite(PORT) || PORT <= 0) {
+  throw new Error(`Invalid PORT: ${portRaw}`);
+}
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server listening on 0.0.0.0:${PORT}`);
+});
+
+process.on('unhandledRejection', (reason) => {
+   console.error('💥 Unhandled Promise Rejection:', reason)
+})
+
+process.on('uncaughtException', (err) => {
+   console.error('💥 Uncaught Exception:', err)
 })
