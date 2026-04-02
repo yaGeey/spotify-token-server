@@ -1,5 +1,13 @@
-import type { Page } from 'playwright'
+import type { Locator, Page } from 'playwright'
 import { captureQueryPromise } from './hashHandlers.js'
+
+const clickWithFallback = async (locator: Locator, timeout = 5000) => {
+   try {
+      await locator.click({ timeout })
+   } catch {
+      await locator.click({ force: true, timeout })
+   }
+}
 
 export const addToPlaylistAction = async (page: Page) => {
    await page.waitForLoadState('domcontentloaded')
@@ -12,13 +20,16 @@ export const addToPlaylistAction = async (page: Page) => {
    await input.pressSequentially('TEST')
    const targetPlaylist = page.getByRole('menuitem', { name: 'TEST', exact: true }).first()
    await targetPlaylist.waitFor({ state: 'visible', timeout: 10000 })
+   await clickWithFallback(targetPlaylist)
+
+   // This button only appears when Spotify detects a duplicate track in playlist.
+   const addAnywayBtn = page.getByRole('button', { name: /add anyway/i }).first()
    try {
-      await targetPlaylist.click({ timeout: 5000 })
+      await addAnywayBtn.waitFor({ state: 'visible', timeout: 4000 })
+      await clickWithFallback(addAnywayBtn)
    } catch {
-      await targetPlaylist.click({ force: true, timeout: 5000 })
+      // No confirmation needed, continue.
    }
-   const addAnywayBtn = page.getByRole('button', { name: 'Add anyway' })
-   await addAnywayBtn.click()
 }
 
 export const removeFromPlaylistAction = async (page: Page) => {
