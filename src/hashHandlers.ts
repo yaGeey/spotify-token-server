@@ -48,7 +48,7 @@ export async function captureQueryPromise(page: Page, operationNames: string[]) 
          }
          return false
       },
-      { timeout: 60000 },
+      { timeout: 30000 },
    )
 
    const hash = (res.request().postDataJSON()?.extensions?.persistedQuery?.sha256Hash || null) as string | null
@@ -78,32 +78,17 @@ export async function updateHash(page: Page, op: Operation) {
 
    await page.goto(op.url, { waitUntil: 'domcontentloaded', timeout: 120000 })
 
-   const actionPromise = op.action
-      ? op.action(page, op.names).catch((e) => {
-           throw new Error(`Action failed: ${e.message}`)
-        })
-      : Promise.resolve()
-
-   await Promise.all([queryPromise, actionPromise])
-
-   let hash = store.tempHashes[op.names[0]] || null
-
-   // VPS fallback: retry once for add/remove flow when no matching operation response was captured.
-   if (!hash && op.names.includes('addToPlaylist') && op.action) {
-      console.warn(`⚠️ [${op.names}] Primary flow produced no hash, retrying add flow`)
-
-      const retryQueryPromise = captureQueryPromise(page, op.names).catch((err) => {
-         console.warn(`⚠️ [${op.names}] Retry listener ended: ${err.message}`)
-         return null
-      })
-
-      await page.goto(op.url, { waitUntil: 'domcontentloaded', timeout: 120000 }).catch(() => {})
+   if (op.action) {
       await op.action(page, op.names).catch((e) => {
-         console.warn(`⚠️ [${op.names}] Retry action failed: ${e.message}`)
+         throw new Error(`Action failed: ${e.message}`)
       })
-      await retryQueryPromise
+   }
 
-      hash = store.tempHashes[op.names[0]] || null
+   // If action already yielded a hash in store.tempHashes, don't block on a long listener timeout.
+   let hash = store.tempHashes[op.names[0]] || null
+   if (!hash) {
+      const queryResult = await Promise.race([queryPromise, delay(2500, 0).then(() => null)])
+      hash = store.tempHashes[op.names[0]] || queryResult?.hash || null
    }
 
    // Final rescue: try modify-playlist path (remove flow when playlist isn't empty).

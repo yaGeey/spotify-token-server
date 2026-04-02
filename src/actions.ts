@@ -60,11 +60,11 @@ const waitForPickerOrMenuToClose = async (input: Locator, menu: Locator, timeout
 }
 
 const selectPlaylistWithFallbacks = async (page: Page, input: Locator, menu: Locator, targetPlaylist: Locator) => {
-   await input.press('Enter').catch(() => {})
+   await input.press('Enter', { timeout: 900 }).catch(() => {})
    if (await waitForPickerOrMenuToClose(input, menu)) return true
 
-   await input.press('ArrowDown').catch(() => {})
-   await input.press('Enter').catch(() => {})
+   await input.press('ArrowDown', { timeout: 900 }).catch(() => {})
+   await input.press('Enter', { timeout: 900 }).catch(() => {})
    if (await waitForPickerOrMenuToClose(input, menu)) return true
 
    await clickWithFallback(targetPlaylist)
