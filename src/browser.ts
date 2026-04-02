@@ -41,6 +41,8 @@ export const createPageFromBrowser = async (browser: Browser) => {
    const page = await context.newPage()
    await page.route('**/*.{png,jpg,jpeg,gif,woff,woff2,sentry}', (r) => r.abort())
    await page.route('**/*{onetrust,i.scdn.co/image/,mosaic.scdn.co/,encore.scdn.co/fonts}*', (r) => r.abort())
+   await page.route('**/*cookielaw*', (r) => r.abort())
+   await page.route('**/*recaptcha*', (r) => r.abort())
    await page.addInitScript(`
       (() => {
          const selectors = [
@@ -48,6 +50,8 @@ export const createPageFromBrowser = async (browser: Browser) => {
             '.onetrust-pc-dark-filter',
             '.ot-sdk-container',
             '.onetrust-close-btn-container',
+            'script[src*="onetrust"]',
+            'script[src*="cookielaw"]',
          ]
 
          const hideOverlay = () => {
@@ -58,6 +62,7 @@ export const createPageFromBrowser = async (browser: Browser) => {
                   element.style.setProperty('display', 'none', 'important')
                   element.style.setProperty('visibility', 'hidden', 'important')
                   element.style.setProperty('pointer-events', 'none', 'important')
+                  element.remove()
                }
             }
 
@@ -69,6 +74,7 @@ export const createPageFromBrowser = async (browser: Browser) => {
          hideOverlay()
          const observer = new MutationObserver(() => hideOverlay())
          observer.observe(document.documentElement, { childList: true, subtree: true })
+         setInterval(hideOverlay, 500)
       })()
    `)
    return page
