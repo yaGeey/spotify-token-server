@@ -21,10 +21,12 @@ export type Operation = (
 ) & { names: [string, ...string[]] }
 
 export type Hashes = Record<string, string | null>
+
 export const store = {
    access: null as AccessTokenResponse | null,
    client: null as ClientTokenResponse | null,
    hashes: {} as Hashes,
    tempHashes: {} as Hashes,
    browser: null as Browser | null,
+   // headers: {} as Record<string, string>,
 }

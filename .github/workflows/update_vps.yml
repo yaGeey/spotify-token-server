@@ -1,0 +1,20 @@
+name: Update on VPS
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            :~/spotify-token-server
+            git pull origin main
+            
+            docker stop spotify || true
+            docker rm spotify || true
+            docker build -t spotify .
+            docker run -d --name spotify --restart unless-stopped -p 3000:8080 --env-file .env spotify
+            docker image prune -f

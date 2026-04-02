@@ -41,6 +41,36 @@ export const createPageFromBrowser = async (browser: Browser) => {
    const page = await context.newPage()
    await page.route('**/*.{png,jpg,jpeg,gif,woff,woff2,sentry}', (r) => r.abort())
    await page.route('**/*{onetrust,i.scdn.co/image/,mosaic.scdn.co/,encore.scdn.co/fonts}*', (r) => r.abort())
+   await page.addInitScript(`
+      (() => {
+         const selectors = [
+            '#onetrust-consent-sdk',
+            '.onetrust-pc-dark-filter',
+            '.ot-sdk-container',
+            '.onetrust-close-btn-container',
+         ]
+
+         const hideOverlay = () => {
+            for (const selector of selectors) {
+               const nodes = document.querySelectorAll(selector)
+               for (const node of nodes) {
+                  const element = node
+                  element.style.setProperty('display', 'none', 'important')
+                  element.style.setProperty('visibility', 'hidden', 'important')
+                  element.style.setProperty('pointer-events', 'none', 'important')
+               }
+            }
+
+            if (document.body) {
+               document.body.style.removeProperty('overflow')
+            }
+         }
+
+         hideOverlay()
+         const observer = new MutationObserver(() => hideOverlay())
+         observer.observe(document.documentElement, { childList: true, subtree: true })
+      })()
+   `)
    return page
 }
 

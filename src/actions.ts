@@ -11,7 +11,12 @@ export const addToPlaylistAction = async (page: Page) => {
    const input = page.locator('[placeholder="Find a playlist"]')
    await input.pressSequentially('TEST')
    const targetPlaylist = page.getByRole('menuitem', { name: 'TEST', exact: true }).first()
-   await targetPlaylist.click()
+   await targetPlaylist.waitFor({ state: 'visible', timeout: 10000 })
+   try {
+      await targetPlaylist.click({ timeout: 5000 })
+   } catch {
+      await targetPlaylist.click({ force: true, timeout: 5000 })
+   }
    const addAnywayBtn = page.getByRole('button', { name: 'Add anyway' })
    await addAnywayBtn.click()
 }

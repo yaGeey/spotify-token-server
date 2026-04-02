@@ -40,6 +40,7 @@ export async function captureQueryPromise(page: Page, operationNames: string[]) 
                      store.tempHashes[name] = hash
                   }
                }
+               // console.log(res.request().headers())
                return operationNames.includes(body.operationName)
             } catch {
                return false
