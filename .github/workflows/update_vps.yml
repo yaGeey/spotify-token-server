@@ -10,9 +10,9 @@ jobs:
           username: ${{ secrets.VPS_USERNAME }}
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
-            :~/spotify-token-server
+            cd ~/spotify-token-server
             git pull origin main
-            
+
             docker stop spotify || true
             docker rm spotify || true
             docker build -t spotify .
