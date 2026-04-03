@@ -35,9 +35,12 @@ export async function captureQueryPromise(page: Page, operationNames: string[]) 
                if (hash) {
                   console.log(body.operationName)
                   store.hashes[body.operationName] = hash
-                  // Record hash for ALL operation names since they share the same hash
-                  for (const name of operationNames) {
-                     store.tempHashes[name] = hash
+                  // Only bind to requested operation group after operationName match.
+                  if (operationNames.includes(body.operationName)) {
+                     // Record hash for ALL operation names in this group (e.g. add/remove).
+                     for (const name of operationNames) {
+                        store.tempHashes[name] = hash
+                     }
                   }
                }
                // console.log(res.request().headers())
