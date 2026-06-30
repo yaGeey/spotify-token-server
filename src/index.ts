@@ -27,7 +27,7 @@ app.use((req, res, next) => {
    next()
 })
 
-if (!process.env.API_SECRET || !process.env.SP_DC || !process.env.SP_KEY) {
+if (!process.env.API_SECRET || !process.env.SP_DC || !process.env.SP_KEY || !process.env.BROWSERLESS_IO_TOKEN) {
    console.error('Error: Missing required environment variables. Please set API_SECRET, SP_DC, and SP_KEY.')
    process.exit(1)
 }
