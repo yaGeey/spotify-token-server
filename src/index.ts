@@ -23,13 +23,6 @@ app.get('/', (req, res) => {
    res.send('alive')
 })
 
-app.use((req, res, next) => {
-   if (req.headers['authorization'] !== process.env.API_SECRET) {
-      return res.status(403).json({ error: 'Wrong Secret Key' })
-   }
-   next()
-})
-
 if (!process.env.API_SECRET || !process.env.SP_DC || !process.env.SP_KEY) {
    console.error('Error: Missing required environment variables. Please set API_SECRET, SP_DC, and SP_KEY.')
    process.exit(1)
@@ -37,10 +30,17 @@ if (!process.env.API_SECRET || !process.env.SP_DC || !process.env.SP_KEY) {
 
 // TODO give userId
 // TODO give sha codes on 401 / !412! error on client. separate route
+app.use(proxyRouter)
+
+app.use((req, res, next) => {
+   if (req.headers['authorization'] !== process.env.API_SECRET) {
+      return res.status(403).json({ error: 'Wrong Secret Key' })
+   }
+   next()
+})
 
 app.use(tokenRouter)
 app.use(hashesRouter)
-app.use(proxyRouter)
 
 // middleware --next-> failed route --next(err?)-> error handler
 app.use(async (err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {

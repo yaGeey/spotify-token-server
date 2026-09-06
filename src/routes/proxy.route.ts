@@ -24,7 +24,7 @@ proxyRouter.use((req, res, next) => {
    }
 
    const expNum = Number(exp)
-   if (isNaN(expNum) || expNum < Date.now()) {
+   if (isNaN(expNum) || expNum < Math.floor(Date.now() / 1000)) {
       return res.status(403).json({ error: 'Invalid or expired exp parameter' })
    }
 
