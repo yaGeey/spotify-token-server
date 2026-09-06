@@ -1,8 +1,10 @@
 import { Router } from 'express'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { Readable } from 'node:stream'
+import cors from 'cors'
 
 export const proxyRouter = Router()
+proxyRouter.use(cors({ origin: '*' }))
 
 const HOP_BY_HOP_HEADERS = [
    'content-encoding',
