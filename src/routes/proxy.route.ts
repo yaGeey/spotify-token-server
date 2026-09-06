@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { createHmac, timingSafeEqual } from 'node:crypto'
 import { Readable } from 'node:stream'
 
 export const proxyRouter = Router()
@@ -16,7 +17,27 @@ const HOP_BY_HOP_HEADERS = [
    'upgrade',
 ]
 
-proxyRouter.get('/proxy-file', async (req, res, next) => {
+proxyRouter.use((req, res, next) => {
+   const { url, exp, sig } = req.query
+   if (!url || !exp || !sig) {
+      return res.status(400).json({ error: 'Missing required query parameters: url, exp, sig' })
+   }
+
+   const expNum = Number(exp)
+   if (isNaN(expNum) || expNum < Date.now()) {
+      return res.status(403).json({ error: 'Invalid or expired exp parameter' })
+   }
+
+   const expectedSig = createHmac('sha256', process.env.API_SECRET!).update(`${url}${exp}`).digest('hex')
+   const sigBuffer = Buffer.from(sig as string, 'hex')
+   const expectedSigBuffer = Buffer.from(expectedSig, 'hex')
+   if (sigBuffer.length !== expectedSigBuffer.length || !timingSafeEqual(sigBuffer, expectedSigBuffer)) {
+      return res.status(403).json({ error: 'Invalid signature' })
+   }
+   next()
+})
+
+proxyRouter.get('/proxy', async (req, res, next) => {
    const targetUrl = req.query.url as string
    if (!targetUrl) return res.status(400).json({ message: 'Missing url parameter' })
 
