@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type RequestHandler } from 'express'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -26,7 +26,7 @@ const HOP_BY_HOP_HEADERS = [
    'upgrade',
 ]
 
-proxyRouter.use((req, res, next) => {
+export const verifyProxyUrl: RequestHandler = (req, res, next) => {
    const { url, exp, sig } = req.query
    if (!url || !exp || !sig) {
       return res.status(400).json({ error: 'Missing required query parameters: url, exp, sig' })
@@ -44,9 +44,9 @@ proxyRouter.use((req, res, next) => {
       return res.status(403).json({ error: 'Invalid signature' })
    }
    next()
-})
+}
 
-proxyRouter.get('/proxy', async (req, res, next) => {
+proxyRouter.get('/proxy', verifyProxyUrl, async (req, res, next) => {
    const targetUrl = req.query.url as string
    if (!targetUrl) return res.status(400).json({ message: 'Missing url parameter' })
 
