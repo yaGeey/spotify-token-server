@@ -1,11 +1,13 @@
 import express from 'express'
 import 'dotenv/config'
 import PQueue from 'p-queue'
-import { store, type AccessTokenResponse, type TokenResponse } from './storage.js'
-import { handleError, closeContexts, withPage } from './browser.js'
-import { delay, logMemory } from './utils.js'
-import { updateAllHashes, operations, updateHash } from './hashHandlers.js'
+import { store } from './storage.js'
+import { handleError, closeContexts } from './browser.js'
+import { logMemory } from './utils.js'
 import './cronjobs.js'
+import { proxyRouter } from './routes/proxy.route.js'
+import { hashesRouter } from './routes/hashes.route.js'
+import { tokenRouter } from './routes/token.route.js'
 
 const app = express()
 export const queue: PQueue = new PQueue({ concurrency: 1 })
@@ -27,7 +29,7 @@ app.use((req, res, next) => {
    next()
 })
 
-if (!process.env.API_SECRET || !process.env.SP_DC || !process.env.SP_KEY || !process.env.BROWSERLESS_IO_TOKEN) {
+if (!process.env.API_SECRET || !process.env.SP_DC || !process.env.SP_KEY) {
    console.error('Error: Missing required environment variables. Please set API_SECRET, SP_DC, and SP_KEY.')
    process.exit(1)
 }
@@ -35,183 +37,9 @@ if (!process.env.API_SECRET || !process.env.SP_DC || !process.env.SP_KEY || !pro
 // TODO give userId
 // TODO give sha codes on 401 / !412! error on client. separate route
 
-function isTokenValid(): boolean {
-   return !!(
-      store.access &&
-      store.access.accessTokenExpirationTimestampMs > Date.now() &&
-      store.client &&
-      store.client.expiresAt > Date.now()
-   )
-}
-
-app.get('/token', async (req, res) => {
-   // return token if valid
-   if (isTokenValid()) {
-      console.log('Returning cached data')
-      return res.json({ access: store.access!, client: store.client! } satisfies TokenResponse)
-   }
-
-   const result = await queue.add(
-      async () => {
-         // if there was a request before, check it's result before making new one
-         if (isTokenValid()) {
-            console.log('Returning cached data')
-            return { access: store.access!, client: store.client! } satisfies TokenResponse
-         }
-
-         return await withPage<TokenResponse>(async (page) => {
-            // access token
-            const accessTokenPromise = page
-               .waitForResponse(async (res) => res.url().includes('https://open.spotify.com/api/token') && res.status() === 200)
-               .then(async (res) => res.json() as Promise<AccessTokenResponse>)
-
-            // client token
-            const clientTokenPromise = page
-               .waitForResponse(
-                  async (res) => res.url().includes('https://clienttoken.spotify.com/v1/clienttoken') && res.status() === 200,
-               )
-               .then(async (res) => {
-                  const json = await res.json().catch(() => null)
-                  const req = res.request()
-                  const payload = req.postDataJSON()
-
-                  return {
-                     ...json.granted_token,
-                     client_version: payload.client_data.client_version,
-                     // headers: req.headers(),
-                  }
-               })
-
-            // get tokens
-            const [accessTokenRes, clientTokenRes] = await Promise.all([
-               accessTokenPromise,
-               clientTokenPromise,
-               page.goto('https://open.spotify.com/', { waitUntil: 'domcontentloaded', timeout: 60000 }),
-            ])
-            console.log('Token obtained successfully')
-
-            // format data
-            store.access = accessTokenRes
-            store.client = {
-               expiresAt: Date.now() + clientTokenRes.refresh_after_seconds * 1000,
-               token: clientTokenRes.token,
-               version: clientTokenRes.client_version,
-            }
-            // store.headers = clientTokenRes.headers
-            return { access: store.access!, client: store.client! } satisfies TokenResponse
-         })
-      },
-      { priority: 1 },
-   )
-   if (!result) throw new Error('Failed to obtain token')
-
-   res.json(result)
-})
-
-// TODO handle 404
-app.get('/hashes', (req, res) => {
-   const raw = String(req.query.names || '')
-   if (raw) {
-      const names = raw.split(',')
-      const filtered = Object.fromEntries(Object.entries(store.hashes).filter(([key]) => names.includes(key)))
-      res.json({ requested: filtered, all: store.hashes })
-   } else {
-      res.json({ requested: {}, all: store.hashes })
-   }
-})
-
-app.put('/hashes', async (req, res) => {
-   const raw = String(req.query.names || '')
-   let tempHash = store.tempHashes
-
-   const names = raw ? raw.split(',') : null
-
-   if (!names) {
-      // update all
-      tempHash = await updateAllHashes()
-   } else {
-      // update selected
-      for (const name of names) {
-         const op = operations.find((o) => o.names.includes(name))
-         if (!op || op.names.every((name) => tempHash[name])) {
-            console.log(`Skipping ${name}`)
-            continue
-         }
-
-         const hash = await queue.add(() => withPage((page) => updateHash(page, op)))
-         // Record hash for ALL names in the operation
-         for (const opName of op.names) tempHash[opName] = hash
-         await delay(800)
-      }
-      const hashesAmount = Object.keys(tempHash).length
-      if (hashesAmount === 0) {
-         return res.status(400).json({ error: 'No valid operation names provided' })
-      }
-      if (names.some((name) => !operations.some((op) => op.names.includes(name)))) {
-         return res.status(404).json({
-            error: 'Some operation names were invalid',
-            details: { raw, hashes: tempHash },
-         })
-      }
-   }
-
-   if (Object.keys(tempHash).some((key) => tempHash[key] === null)) {
-      console.error('Failed to update some hashes', tempHash)
-      return res.status(502).json({ error: 'Failed to update some hashes', details: tempHash })
-   }
-
-   store.tempHashes = {}
-   Object.assign(store.hashes, tempHash)
-   const requested = Object.fromEntries(Object.entries(store.hashes).filter(([key, value]) => names?.includes(key) && value))
-   res.json({ requested, all: store.hashes })
-})
-
-app.get('/proxy-file', async (req, _) => {
-   const { searchParams } = new URL(req.url)
-   const targetUrl = searchParams.get('url')
-   if (!targetUrl) return Response.json({ message: 'Missing url parameter' }, { status: 400 })
-
-   try {
-      new URL(targetUrl)
-   } catch {
-      return Response.json({ error: 'Invalid url parameter' }, { status: 400 })
-   }
-
-   const forwardHeaders: Record<string, string> = {}
-   for (const h of ['Authorization', 'Referer']) {
-      const v = req.get(h)
-      if (v) forwardHeaders[h] = v
-   }
-
-   const res = await fetch(targetUrl, {
-      redirect: 'follow',
-      headers: {
-         ...forwardHeaders,
-         'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',
-      },
-   })
-
-   const headers = new Headers(res.headers)
-   headers.set('Access-Control-Expose-Headers', '*')
-
-   // Prevent browser decoding mismatches when streaming proxied bodies. hop-by-hop headers
-   headers.delete('content-encoding')
-   headers.delete('content-length')
-   headers.delete('transfer-encoding')
-   headers.delete('connection')
-   headers.delete('keep-alive')
-   headers.delete('proxy-authenticate')
-   headers.delete('proxy-authorization')
-   headers.delete('te')
-   headers.delete('trailer')
-   headers.delete('upgrade')
-
-   return new Response(res.body, {
-      status: res.status,
-      headers,
-   })
-})
+app.use(tokenRouter)
+app.use(hashesRouter)
+app.use(proxyRouter)
 
 // middleware --next-> failed route --next(err?)-> error handler
 app.use(async (err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -222,15 +50,9 @@ app.use(async (err: unknown, req: express.Request, res: express.Response, next: 
    }
 })
 
-// TypeScript / Node.js
 const portRaw = process.env.PORT ?? '3000'
 const PORT = Number.parseInt(portRaw, 10)
-
-if (!Number.isFinite(PORT) || PORT <= 0) {
-   throw new Error(`Invalid PORT: ${portRaw}`)
-}
-
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(3000, '0.0.0.0', () => {
    console.log(`Server listening on 0.0.0.0:${PORT}`)
 })
 
