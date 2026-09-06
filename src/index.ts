@@ -3,7 +3,6 @@ import 'dotenv/config'
 import PQueue from 'p-queue'
 import { store } from './storage.js'
 import { handleError, closeContexts } from './browser.js'
-import { logMemory } from './utils.js'
 import './cronjobs.js'
 import { proxyRouter } from './routes/proxy.route.js'
 import { hashesRouter } from './routes/hashes.route.js'
@@ -13,8 +12,10 @@ const app = express()
 export const queue: PQueue = new PQueue({ concurrency: 1 })
 
 app.use((req, res, next) => {
-   logMemory(`--> Start ${req.method} ${req.url}`)
-   res.on('finish', () => logMemory(`<-- End ${req.method} ${req.url}`))
+   if (req.url !== '/favicon.ico') {
+      console.log(`[${new Date().toISOString()}] --> ${req.method} ${req.url}`)
+      res.on('finish', () => console.log(`[${new Date().toISOString()}] <-- ${req.method} ${req.url} - ${res.statusCode}`))
+   }
    next()
 })
 
@@ -52,7 +53,7 @@ app.use(async (err: unknown, req: express.Request, res: express.Response, next: 
 
 const portRaw = process.env.PORT ?? '3000'
 const PORT = Number.parseInt(portRaw, 10)
-app.listen(3000, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', () => {
    console.log(`Server listening on 0.0.0.0:${PORT}`)
 })
 
