@@ -89,15 +89,12 @@ export async function ensureBrowser(): Promise<Browser> {
 
    if (!browserPromise) {
       browserPromise = (async () => {
-         // const b = await chromium.launch({
-         //    headless: true,
-         //    args: ['--disable-dev-shm-usage', '--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
-         // })
-
-         // Constructing the WebSocket URL for connection over Chrome DevTools Protocol
-         // Browserless handles stealth and performance flags natively via request parameters if needed
-         const wsEndpoint = `wss://chrome.browserless.io?token=${process.env.BROWSERLESS_IO_TOKEN!}`
-         const b = await chromium.connectOverCDP(wsEndpoint)
+         const b = await chromium.launch({
+            headless: true,
+            args: ['--disable-dev-shm-usage', '--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
+         })
+         // const wsEndpoint = `wss://chrome.browserless.io?token=${process.env.BROWSERLESS_IO_TOKEN!}`
+         // const b = await chromium.connectOverCDP(wsEndpoint)
 
          b.on('disconnected', () => {
             console.warn('Browser disconnected')
