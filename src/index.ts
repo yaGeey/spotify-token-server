@@ -166,6 +166,53 @@ app.put('/hashes', async (req, res) => {
    res.json({ requested, all: store.hashes })
 })
 
+app.get('/proxy-file', async (req, _) => {
+   const { searchParams } = new URL(req.url)
+   const targetUrl = searchParams.get('url')
+   if (!targetUrl) return Response.json({ message: 'Missing url parameter' }, { status: 400 })
+
+   try {
+      new URL(targetUrl)
+   } catch {
+      return Response.json({ error: 'Invalid url parameter' }, { status: 400 })
+   }
+
+   const forwardHeaders: Record<string, string> = {}
+   for (const h of ['Authorization', 'Referer']) {
+      const v = req.get(h)
+      if (v) forwardHeaders[h] = v
+   }
+
+   const res = await fetch(targetUrl, {
+      redirect: 'follow',
+      headers: {
+         ...forwardHeaders,
+         'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36',
+      },
+   })
+
+   const headers = new Headers(res.headers)
+   headers.set('Access-Control-Expose-Headers', '*')
+
+   // Prevent browser decoding mismatches when streaming proxied bodies. hop-by-hop headers
+   headers.delete('content-encoding')
+   headers.delete('content-length')
+   headers.delete('transfer-encoding')
+   headers.delete('connection')
+   headers.delete('keep-alive')
+   headers.delete('proxy-authenticate')
+   headers.delete('proxy-authorization')
+   headers.delete('te')
+   headers.delete('trailer')
+   headers.delete('upgrade')
+
+   return new Response(res.body, {
+      status: res.status,
+      headers,
+   })
+})
+
 // middleware --next-> failed route --next(err?)-> error handler
 app.use(async (err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
    await closeContexts(store.browser)
@@ -176,16 +223,16 @@ app.use(async (err: unknown, req: express.Request, res: express.Response, next: 
 })
 
 // TypeScript / Node.js
-const portRaw = process.env.PORT ?? "3000";
-const PORT = Number.parseInt(portRaw, 10);
+const portRaw = process.env.PORT ?? '3000'
+const PORT = Number.parseInt(portRaw, 10)
 
 if (!Number.isFinite(PORT) || PORT <= 0) {
-  throw new Error(`Invalid PORT: ${portRaw}`);
+   throw new Error(`Invalid PORT: ${portRaw}`)
 }
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server listening on 0.0.0.0:${PORT}`);
-});
+app.listen(PORT, '0.0.0.0', () => {
+   console.log(`Server listening on 0.0.0.0:${PORT}`)
+})
 
 process.on('unhandledRejection', (reason) => {
    console.error('💥 Unhandled Promise Rejection:', reason)
