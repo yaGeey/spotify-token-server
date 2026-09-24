@@ -48,7 +48,7 @@ export const verifyProxyUrl: RequestHandler = (req, res, next) => {
 
 proxyRouter.get('/proxy', verifyProxyUrl, async (req, res, next) => {
    const targetUrl = req.query.url as string
-   if (!targetUrl) return res.status(400).json({ message: 'Missing url parameter' })
+   if (!targetUrl) return res.status(400).json({ error: 'Missing url parameter' })
 
    try {
       new URL(targetUrl)

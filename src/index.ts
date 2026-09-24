@@ -7,8 +7,10 @@ import './cronjobs.js'
 import { proxyRouter } from './routes/proxy.route.js'
 import { hashesRouter } from './routes/hashes.route.js'
 import { tokenRouter } from './routes/token.route.js'
+import { spotifyRouter } from './routes/spotify.route.js'
 
 const app = express()
+app.use(express.json({ limit: '50mb' }))
 export const queue: PQueue = new PQueue({ concurrency: 1 })
 
 app.use((req, res, next) => {
@@ -39,6 +41,7 @@ app.use((req, res, next) => {
    next()
 })
 
+app.use(spotifyRouter)
 app.use(tokenRouter)
 app.use(hashesRouter)
 

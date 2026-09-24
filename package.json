@@ -4,28 +4,38 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "npx tsx src/index.ts",
-    "build": "tsc"
+    "start": "tsx src/index.ts",
+    "dev": "tsx --watch src/index.ts",
+    "typecheck": "pnpm tsc --noEmit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "axios": "^1.20.0",
+    "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.2.4",
     "express": "^5.2.1",
     "node-cron": "^4.2.1",
+    "p-limit": "^7.3.3",
     "p-queue": "^9.1.0",
     "playwright": "1.58.2",
     "playwright-extra": "^4.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.2.3",
     "@types/node-cron": "^3.0.11",
-    "typescript": "^5.9.3"
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true
   }
 }

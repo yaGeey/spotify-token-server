@@ -14,18 +14,24 @@ function isTokenValid(): boolean {
    )
 }
 
-tokenRouter.get('/token', async (req, res) => {
+// function isTokenValid(): boolean {
+//    const accessToken = dbTokens.get('access')
+//    const clientToken = dbTokens.get('client')
+
+//    if (accessToken && clientToken && accessToken.expiresAt > Date.now() && clientToken.expiresAt > Date.now()) return true
+//    else return false
+// }
+
+export async function getToken(): Promise<TokenResponse | null> {
    // return token if valid
    if (isTokenValid()) {
-      console.log('Returning cached data')
-      return res.json({ access: store.access!, client: store.client! } satisfies TokenResponse)
+      return { access: store.access!, client: store.client! } satisfies TokenResponse
    }
 
    const result = await queue.add(
       async () => {
          // if there was a request before, check it's result before making new one
          if (isTokenValid()) {
-            console.log('Returning cached data')
             return { access: store.access!, client: store.client! } satisfies TokenResponse
          }
 
@@ -73,7 +79,11 @@ tokenRouter.get('/token', async (req, res) => {
       },
       { priority: 1 },
    )
-   if (!result) throw new Error('Failed to obtain token')
+   return result
+}
 
-   res.json(result)
+tokenRouter.get('/token', async (req, res) => {
+   const token = await getToken()
+   if (!token) return res.status(500).json({ error: 'Failed to obtain token' })
+   return res.json(token)
 })

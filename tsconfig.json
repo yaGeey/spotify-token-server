@@ -1,9 +1,17 @@
 {
    // Visit https://aka.ms/tsconfig to read more about this file
    "compilerOptions": {
+      "preserveSymlinks": false,
+      "allowImportingTsExtensions": true,
+      "rewriteRelativeImportExtensions": true,
+
+      "noEmit": true,
+      "declaration": false,
+      "declarationMap": false,
+
       // File Layout
-      "rootDir": "./src",
-      "outDir": "./dist",
+      // "rootDir": "./src",
+      // "outDir": "./dist",
 
       // Environment Settings
       // See also https://aka.ms/tsconfig/module
@@ -16,8 +24,6 @@
 
       // Other Outputs
       "sourceMap": true,
-      "declaration": true,
-      "declarationMap": true,
 
       // Stricter Typechecking Options
       "noUncheckedIndexedAccess": true,
