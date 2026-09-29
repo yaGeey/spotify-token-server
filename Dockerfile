@@ -1,13 +1,11 @@
 FROM mcr.microsoft.com/playwright:v1.58.2-noble AS builder
 WORKDIR /app
 RUN npm install -g pnpm@12
-COPY package.json pnpm-lock.yaml* ./
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile --dangerously-allow-same-user-all-build-scripts
+COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml ./
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --store-dir=/pnpm/store
 COPY . .
 RUN pnpm tsc
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --prod --frozen-lockfile --dangerously-allow-same-user-all-build-scripts
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile --store-dir=/pnpm/store
 
 FROM mcr.microsoft.com/playwright:v1.58.2-noble
 WORKDIR /app

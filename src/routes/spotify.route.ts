@@ -10,7 +10,6 @@ import type { PlaylistStatus } from '../types/types.ts'
 import { verifySignedUrl } from '../middlewares.ts'
 
 export const spotifyRouter = Router()
-spotifyRouter.use(verifySignedUrl)
 
 const userToPlaylistMap = new Map<string, PlaylistStatus>()
 
@@ -94,7 +93,7 @@ spotifyRouter.use(async (req, res, next) => {
    next()
 })
 
-spotifyRouter.post('/spotify/playlist', async (req, res) => {
+spotifyRouter.post('/spotify/playlist', verifySignedUrl, async (req, res) => {
    const regenerate = false // TODO implement regenerate
    const validationRes = z.object({ 'x-client-id': z.string() }).safeParse(req.headers)
 
@@ -326,7 +325,7 @@ spotifyRouter.post('/spotify/playlist/:playlistId', async (req, res) => {
    res.status(200).json(processingPl)
 })
 
-spotifyRouter.get('/spotify/playlist', async (req, res) => {
+spotifyRouter.get('/spotify/playlist', verifySignedUrl, async (req, res) => {
    const validationRes = z.object({ 'x-client-id': z.string() }).safeParse(req.headers)
    if (!validationRes.success) {
       return res.status(400).json({ message: 'Validation failed', details: z.treeifyError(validationRes.error) })
