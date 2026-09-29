@@ -33,14 +33,6 @@ if (!process.env.API_SECRET || !process.env.SP_DC || !process.env.SP_KEY) {
 // TODO give userId
 // TODO give sha codes on 401 / !412! error on client. separate route
 app.use(proxyRouter)
-
-app.use((req, res, next) => {
-   if (req.headers['authorization'] !== process.env.API_SECRET) {
-      return res.status(403).json({ error: 'Wrong Secret Key' })
-   }
-   next()
-})
-
 app.use(spotifyRouter)
 app.use(tokenRouter)
 app.use(hashesRouter)

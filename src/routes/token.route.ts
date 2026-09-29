@@ -2,8 +2,10 @@ import { Router } from 'express'
 import { withPage } from '../browser.js'
 import { queue } from '../index.js'
 import { store, type TokenResponse, type AccessTokenResponse } from '../storage.js'
+import { verifyAuthorizationHeader } from '../middlewares.ts'
 
 export const tokenRouter = Router()
+tokenRouter.use(verifyAuthorizationHeader)
 
 function isTokenValid(): boolean {
    return !!(

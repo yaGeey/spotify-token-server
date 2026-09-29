@@ -1,4 +1,4 @@
-import { Router} from 'express'
+import { Router } from 'express'
 import z from 'zod'
 import { getToken } from './token.route.ts'
 import type { TokenResponse } from '../storage.ts'
@@ -7,8 +7,10 @@ import type { SpotifySearchQueryResponse, TrackResponseWrapper } from '../types/
 import pLimit from 'p-limit'
 import { isArtistMatch, isTitleMatch } from '../utils/spotify-text.js'
 import type { PlaylistStatus } from '../types/types.ts'
+import { verifySignedUrl } from '../middlewares.ts'
 
 export const spotifyRouter = Router()
+spotifyRouter.use(verifySignedUrl)
 
 const userToPlaylistMap = new Map<string, PlaylistStatus>()
 
@@ -103,7 +105,7 @@ spotifyRouter.post('/spotify/playlist', async (req, res) => {
    const token = res.locals.token as TokenResponse
 
    if (!regenerate && userToPlaylistMap.has(clientId)) {
-      return res.json({ id: userToPlaylistMap.get(clientId) })
+      return res.json({ id: userToPlaylistMap.get(clientId)?.playlistId })
    } else {
       // create a new playlist
       const customHeaders = {
@@ -164,7 +166,7 @@ spotifyRouter.post('/spotify/playlist', async (req, res) => {
    }
 })
 
-spotifyRouter.post('/spotify/playlist/:playlistId/upload-beatmaps', async (req, res) => {
+spotifyRouter.post('/spotify/playlist/:playlistId', async (req, res) => {
    // FIXME setup Nginx too
    // TODO s:
    // check if everything existed, add in DB map for map id to spotify track id, and check if the map is already in the playlist before adding it again

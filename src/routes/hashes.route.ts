@@ -4,8 +4,10 @@ import { updateAllHashes, operations, updateHash } from '../hashHandlers.js'
 import { queue } from '../index.js'
 import { store } from '../storage.js'
 import { delay } from '../utils.js'
+import { verifyAuthorizationHeader } from '../middlewares.ts'
 
 export const hashesRouter = Router()
+hashesRouter.use(verifyAuthorizationHeader)
 
 // TODO handle 404
 hashesRouter.get('/hashes', (req, res) => {

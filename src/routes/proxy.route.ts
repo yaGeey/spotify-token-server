@@ -1,8 +1,8 @@
-import { Router, type RequestHandler } from 'express'
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { Router } from 'express'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import cors from 'cors'
+import { verifySignedUrl } from '../middlewares.ts'
 
 export const proxyRouter = Router()
 proxyRouter.use(
@@ -26,27 +26,7 @@ const HOP_BY_HOP_HEADERS = [
    'upgrade',
 ]
 
-export const verifyProxyUrl: RequestHandler = (req, res, next) => {
-   const { url, exp, sig } = req.query
-   if (!url || !exp || !sig) {
-      return res.status(400).json({ error: 'Missing required query parameters: url, exp, sig' })
-   }
-
-   const expNum = Number(exp)
-   if (isNaN(expNum) || expNum < Math.floor(Date.now() / 1000)) {
-      return res.status(403).json({ error: 'Invalid or expired exp parameter' })
-   }
-
-   const expectedSig = createHmac('sha256', process.env.API_SECRET!).update(`${url}${exp}`).digest('hex')
-   const sigBuffer = Buffer.from(sig as string, 'hex')
-   const expectedSigBuffer = Buffer.from(expectedSig, 'hex')
-   if (sigBuffer.length !== expectedSigBuffer.length || !timingSafeEqual(sigBuffer, expectedSigBuffer)) {
-      return res.status(403).json({ error: 'Invalid signature' })
-   }
-   next()
-}
-
-proxyRouter.get('/proxy', verifyProxyUrl, async (req, res, next) => {
+proxyRouter.get('/proxy', verifySignedUrl, async (req, res, next) => {
    const targetUrl = req.query.url as string
    if (!targetUrl) return res.status(400).json({ error: 'Missing url parameter' })
 
