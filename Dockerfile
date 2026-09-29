@@ -2,16 +2,19 @@ FROM mcr.microsoft.com/playwright:v1.58.2-noble AS builder
 WORKDIR /app
 RUN npm install -g pnpm@12
 COPY package.json pnpm-lock.yaml* ./
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --dangerously-allow-same-user-all-build-scripts
 COPY . .
 RUN pnpm tsc
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --prod --frozen-lockfile --dangerously-allow-same-user-all-build-scripts
 
 FROM mcr.microsoft.com/playwright:v1.58.2-noble
 WORKDIR /app
-RUN npm install -g pnpm@12
-COPY package.json pnpm-lock.yaml* ./
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/dist ./dist
+ENV NODE_ENV=production
 ENV DEBUG=pw:api
 EXPOSE 3000
 CMD ["node", "dist/index.js"]
