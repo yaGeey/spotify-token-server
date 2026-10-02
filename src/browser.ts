@@ -93,9 +93,6 @@ export async function ensureBrowser(): Promise<Browser> {
             headless: true,
             args: ['--disable-dev-shm-usage', '--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
          })
-         // const wsEndpoint = `wss://chrome.browserless.io?token=${process.env.BROWSERLESS_IO_TOKEN!}`
-         // const b = await chromium.connectOverCDP(wsEndpoint)
-
          b.on('disconnected', () => {
             console.warn('Browser disconnected')
             browserPromise = null
@@ -118,6 +115,7 @@ export async function restartBrowser() {
    return ensureBrowser()
 }
 
+// TODO add axios err message
 export function handleError(error: unknown) {
    const details = error instanceof Error ? error.message : 'Unknown error'
    console.error('💥 Error:', details)

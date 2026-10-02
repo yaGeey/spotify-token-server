@@ -13,8 +13,5 @@ jobs:
             cd ~/spotify-token-server
             git pull origin main
 
-            docker stop spotify || true
-            docker rm spotify || true
-            docker build -t spotify .
-            docker run -d --name spotify --restart unless-stopped -p 3000:8080 --env-file .env spotify
+            docker compose up -d --build
             docker image prune -f

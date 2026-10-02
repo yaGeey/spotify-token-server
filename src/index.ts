@@ -1,34 +1,24 @@
 import express from 'express'
 import 'dotenv/config'
-import PQueue from 'p-queue'
+import { logger, httpLogger } from './logger.ts'
 import { store } from './storage.js'
-import { handleError, closeContexts } from './browser.js'
+import { handleError, closeContexts, killBrowser } from './browser.js'
 import './cronjobs.js'
 import { proxyRouter } from './routes/proxy.route.js'
 import { hashesRouter } from './routes/hashes.route.js'
 import { tokenRouter } from './routes/token.route.js'
 import { spotifyRouter } from './routes/spotify.route.js'
+import { recoverStalePlaylists } from './services/playlistJob.ts'
+import './secrets.ts'
+export { queue } from './queue.ts'
 
 const app = express()
+app.use(httpLogger)
 app.use(express.json({ limit: '50mb' }))
-export const queue: PQueue = new PQueue({ concurrency: 1 })
-
-app.use((req, res, next) => {
-   if (req.url !== '/favicon.ico') {
-      console.log(`[${new Date().toISOString()}] --> ${req.method} ${req.url}`)
-      res.on('finish', () => console.log(`[${new Date().toISOString()}] <-- ${req.method} ${req.url} - ${res.statusCode}`))
-   }
-   next()
-})
 
 app.get('/', (req, res) => {
    res.send('alive')
 })
-
-if (!process.env.API_SECRET || !process.env.SP_DC || !process.env.SP_KEY) {
-   console.error('Error: Missing required environment variables. Please set API_SECRET, SP_DC, and SP_KEY.')
-   process.exit(1)
-}
 
 // TODO give userId
 // TODO give sha codes on 401 / !412! error on client. separate route
@@ -46,16 +36,28 @@ app.use(async (err: unknown, req: express.Request, res: express.Response, next: 
    }
 })
 
-const portRaw = process.env.PORT ?? '3000'
+recoverStalePlaylists()
+
+const portRaw = process.env.PORT ?? '8080'
 const PORT = Number.parseInt(portRaw, 10)
 app.listen(PORT, '0.0.0.0', () => {
-   console.log(`Server listening on 0.0.0.0:${PORT}`)
+   logger.info({ port: PORT, nodeEnv: process.env.NODE_ENV ?? 'development' }, 'server.started')
 })
 
 process.on('unhandledRejection', (reason) => {
-   console.error('💥 Unhandled Promise Rejection:', reason)
+   logger.error({ err: reason }, 'process.unhandled_rejection')
 })
 
 process.on('uncaughtException', (err) => {
-   console.error('💥 Uncaught Exception:', err)
+   logger.fatal({ err }, 'process.uncaught_exception')
+   process.exit(1)
 })
+
+// graceful shutdown on SIGINT (Ctrl+C) or SIGTERM
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+   process.on(signal, async () => {
+      logger.info({ signal }, 'process.shutdown')
+      await killBrowser(store.browser)
+      process.exit(0)
+   })
+}
